@@ -1,0 +1,18 @@
+{
+  "name": "codexmap",
+  "version": "1.0.0",
+  "description": "Live Codebase Intelligence & Context Drift Detection — Built by @Somu.ai for OpenAI Codex Hackathon 2025",
+  "main": "orchestrator.js",
+  "scripts": {
+    "start": "node orchestrator.js",
+    "test": "bash scripts/integration-test.sh"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "ws": "^8.16.0",
+    "@babel/parser": "^7.24.0",
+    "cytoscape": "^3.28.1"
+  },
+  "author": "@Somu.ai",
+  "license": "MIT"
+}

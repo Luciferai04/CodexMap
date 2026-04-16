@@ -1,0 +1,15 @@
+{
+  "auth.ts": 1,
+  "auth.ts::setupAuth": 1,
+  "auth.ts::arrow_anonymous": 1,
+  "blockchain.ts": 0,
+  "blockchain.ts::compileSmartContract": 0,
+  "blockchain.ts::deployToMainnet": 0,
+  "routes.ts": 1,
+  "routes.ts::setupRoutes": 1,
+  "routes.ts::arrow_anonymous": 1,
+  "server.ts": 1,
+  "server.ts::buildServer": 1,
+  "server.ts::run": 1,
+  "root": 0
+}

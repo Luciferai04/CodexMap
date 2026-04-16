@@ -1,0 +1,13 @@
+node_modules/
+venv/
+shared/*.json
+shared/*.txt
+output/
+*.log
+*.pid
+.DS_Store
+.antigravity/
+.gemini/
+scratch/
+ui_screenshot.png
+CodexMap_Whitepaper_Preview.png

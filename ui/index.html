@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CodexMap — Live Codebase Intelligence built on Coinbase Design System.">
+  <title>CodexMap — Live Architecture</title>
+
+  <!-- Cytoscape from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+
+  <style>
+    :root {
+      --cb-blue: #0052ff;
+      --cb-blue-hover: #578bfa;
+      --cb-white: #ffffff;
+      --cb-black: #0a0b0d;
+      --cb-gray-surface: #eef0f3;
+      --cb-dark-surface: #282b31;
+      --cb-border: rgba(91, 97, 110, 0.2);
+      --green: #098551;
+      --yellow: #f5b000;
+      --red: #cf2a2a;
+      --radius-pill: 56px;
+      --radius-card: 16px;
+      --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-text: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+      --transition: 0.2s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-text);
+      background-color: var(--cb-black);
+      color: var(--cb-white);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      font-size: 16px;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    #app {
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      grid-template-columns: 280px 1fr 0px;
+      height: 100vh;
+      transition: grid-template-columns 0.3s ease;
+    }
+    #app.panel-open { grid-template-columns: 280px 1fr 380px; }
+
+    /* ─── Header ─────────────────────────────────────────────────── */
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--cb-white);
+      color: var(--cb-black);
+      border-bottom: 1px solid var(--cb-border);
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .logo {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--cb-blue);
+      letter-spacing: -0.5px;
+    }
+    .project-name {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 14px;
+      background: var(--cb-gray-surface);
+      border-radius: var(--radius-pill);
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .pill-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--cb-border);
+      background: var(--cb-white);
+      color: var(--cb-black);
+    }
+    .badge-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ─── Collapse Banner ────────────────────────────────────────── */
+    #collapse-banner {
+      display: none;
+      grid-column: 1 / -1;
+      padding: 10px 24px;
+      background: var(--red);
+      color: var(--cb-white);
+      font-weight: 600;
+      font-size: 13px;
+      text-align: center;
+    }
+    #collapse-banner.visible { display: block; }
+
+    /* ─── Sidebar ────────────────────────────────────────────────── */
+    #sidebar-left {
+      background: var(--cb-black);
+      border-right: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 20px 20px 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--cb-white);
+    }
+    #drift-chart-container { flex: 1; min-height: 160px; position: relative; }
+    #drift-chart { width: 100%; height: 100%; }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px;
+    }
+    .stat-label { color: rgba(255,255,255,0.5); font-weight: 600; }
+    .stat-val { font-family: var(--font-mono); }
+
+    /* ─── Canvas ─────────────────────────────────────────────────── */
+    #graph-container {
+      position: relative;
+      background: var(--cb-black);
+      overflow: hidden;
+    }
+    #cy { width: 100%; height: 100%; }
+
+    /* ─── Loading Overlay ────────────────────────────────────────── */
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--cb-black);
+      z-index: 50;
+      transition: opacity 0.4s;
+      gap: 16px;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--cb-blue);
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-status {
+      color: rgba(255,255,255,0.4);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* ─── Tooltip ────────────────────────────────────────────────── */
+    #tooltip {
+      position: absolute;
+      padding: 10px 14px;
+      background: var(--cb-white);
+      color: var(--cb-black);
+      border-radius: 12px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 200;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      transition: opacity 0.1s;
+      max-width: 260px;
+    }
+    #tooltip.visible { opacity: 1; }
+
+    /* ─── Right Panel ────────────────────────────────────────────── */
+    #panel-right {
+      background: var(--cb-dark-surface);
+      border-left: 1px solid rgba(255,255,255,0.08);
+      overflow-y: auto;
+      display: none;
+      color: var(--cb-white);
+    }
+    #app.panel-open #panel-right { display: block; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-left">
+        <span class="logo">CodexMap</span>
+        <span class="project-name" id="project-name">Project</span>
+        <button class="pill-badge" style="cursor:pointer; background:rgba(0,82,255,0.05); border-color:var(--cb-blue); margin-left: 8px;" onclick="CodexExplorer.show()">
+          📂 Project Folder
+        </button>
+      </div>
+      <div class="header-right">
+        <div class="pill-badge">
+          <span class="badge-dot" id="drift-dot" style="background:#0052ff"></span>
+          <span id="drift-score-text">Health: —</span>
+        </div>
+        <div class="pill-badge">
+          <span class="badge-dot" id="status-dot" style="background:#f5b000"></span>
+          <span id="status-text">Connecting…</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="collapse-banner"></div>
+
+    <aside id="sidebar-left">
+      <div class="sidebar-header">Health Timeline</div>
+      <div id="drift-chart-container"><canvas id="drift-chart"></canvas></div>
+      <div class="stat-row">
+        <span class="stat-label">Current</span>
+        <span class="stat-val" id="stat-current">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Peak</span>
+        <span class="stat-val" id="stat-peak">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Nodes</span>
+        <span class="stat-val" id="stat-nodes">0</span>
+      </div>
+    </aside>
+
+    <main id="graph-container">
+      <div id="cy"></div>
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-status">Connecting to backend…</div>
+      </div>
+      <div id="tooltip">
+        <div id="tt-id" style="font-weight:700; margin-bottom:4px"></div>
+        <div><span id="tt-grade" style="font-weight:600"></span> <span id="tt-score" style="color:#5b616e; margin-left:6px"></span></div>
+      </div>
+    </main>
+
+    <aside id="panel-right"></aside>
+  </div>
+
+  <script src="graph.js"></script>
+  <script src="panel.js"></script>
+  <script src="drift-timeline.js"></script>
+  <script src="explorer.js"></script>
+
+  <script>
+    /* ─── WebSocket State ──────────────────────────────────────── */
+    let ws = null;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+
+    /* ─── Boot ─────────────────────────────────────────────────── */
+    (function boot() {
+      console.log('[CodexMap] Booting…');
+      const params = new URLSearchParams(window.location.search);
+      const name = params.get('project') || 'CodexMap';
+      document.getElementById('project-name').textContent = name;
+      document.title = name + ' — CodexMap';
+
+      try {
+        CodexGraph.init();
+        console.log('[CodexMap] ✅ Graph initialized');
+      } catch(e) {
+        console.error('[CodexMap] ❌ Graph init failed:', e);
+      }
+
+      try {
+        CodexPanel.init();
+        console.log('[CodexMap] ✅ Panel initialized');
+      } catch(e) {
+        console.error('[CodexMap] ❌ Panel init failed:', e);
+      }
+
+      try {
+        DriftTimeline.init();
+        console.log('[CodexMap] ✅ Timeline initialized');
+      } catch(e) {
+        console.error('[CodexMap] ❌ Timeline init failed:', e);
+      }
+
+      try {
+        CodexExplorer.init();
+        console.log('[CodexMap] ✅ Explorer initialized');
+      } catch(e) {
+        console.error('[CodexMap] ❌ Explorer init failed:', e);
+      }
+
+      connectWS();
+    })();
+
+    /* ─── WebSocket ────────────────────────────────────────────── */
+    function connectWS() {
+      const url = 'ws://localhost:4242';
+      console.log('[CodexMap] Connecting to', url);
+      document.getElementById('loading-status').textContent = 'Connecting to backend…';
+
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        console.error('[CodexMap] ❌ WebSocket constructor threw:', e);
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        console.log('[CodexMap] ✅ WebSocket open');
+        reconnectAttempts = 0;
+        document.getElementById('status-dot').style.background = '#098551';
+        document.getElementById('status-text').textContent = 'Live';
+        document.getElementById('loading-status').textContent = 'Waiting for data…';
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          console.log('[CodexMap] MSG:', msg.type, 
+            msg.payload && msg.payload.nodes ? msg.payload.nodes.length + ' nodes' : '');
+          handleMsg(msg);
+        } catch (e) {
+          console.error('[CodexMap] ❌ Parse error:', e);
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.error('[CodexMap] ❌ WebSocket error:', e);
+      };
+
+      ws.onclose = () => {
+        console.log('[CodexMap] WebSocket closed');
+        document.getElementById('status-dot').style.background = '#cf2a2a';
+        document.getElementById('status-text').textContent = 'Disconnected';
+        scheduleReconnect();
+      };
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer) return;
+      reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 8000);
+      console.log('[CodexMap] Reconnecting in', delay, 'ms…');
+      document.getElementById('loading-status').textContent = 'Reconnecting in ' + (delay/1000) + 's…';
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWS();
+      }, delay);
+    }
+
+    /* ─── Message Handler ──────────────────────────────────────── */
+    function handleMsg(msg) {
+      switch (msg.type) {
+        case 'full_reset':
+          console.log('[CodexMap] full_reset with', 
+            (msg.payload.nodes || []).length, 'nodes,',
+            (msg.payload.edges || []).length, 'edges');
+          CodexGraph.fullReset(msg.payload);
+          document.getElementById('loading-overlay').classList.add('hidden');
+          document.getElementById('stat-nodes').textContent = (msg.payload.nodes || []).length;
+          break;
+
+        case 'graph_update':
+          CodexGraph.applyDiff(msg.payload);
+          break;
+
+        case 'node_grade':
+          CodexGraph.updateGrade(msg.payload);
+          break;
+
+        case 'drift_score':
+          DriftTimeline.addDataPoint(msg.payload);
+          document.getElementById('drift-score-text').textContent = 'Drift: ' + msg.payload.score;
+          document.getElementById('stat-current').textContent = msg.payload.score;
+          document.getElementById('drift-dot').style.background =
+            msg.payload.score > 80 ? '#098551' : msg.payload.score > 50 ? '#f5b000' : '#cf2a2a';
+          break;
+
+        case 'collapse_warning':
+          var banner = document.getElementById('collapse-banner');
+          if (msg.payload && msg.payload.triggered) {
+            banner.classList.add('visible');
+            banner.textContent = '🚨 Architectural Collapse: ' + 
+              (msg.payload.signals || []).join(' · ');
+          } else {
+            banner.classList.remove('visible');
+          }
+          break;
+
+        case 'generation_done':
+          document.getElementById('status-text').textContent = 'Generation complete';
+          break;
+      }
+    }
+  </script>
+</body>
+</html>
