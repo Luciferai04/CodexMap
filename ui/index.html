@@ -3,406 +3,171 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CodexMap — Live Codebase Intelligence built on Coinbase Design System.">
-  <title>CodexMap — Live Architecture</title>
+  <meta http-equiv="Content-Security-Policy" 
+      content="default-src 'self'; 
+               script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.cdnfonts.com https://fonts.googleapis.com https://unpkg.com; 
+               style-src 'self' 'unsafe-inline' https://fonts.cdnfonts.com https://fonts.googleapis.com; 
+               font-src 'self' https://fonts.cdnfonts.com https://fonts.gstatic.com; 
+               connect-src ws://localhost:4242 http://localhost:3000 http://localhost:4242 https://api.openai.com; 
+               img-src 'self' data:;">
+  <title>CodexMap | Agentic Codebase Intelligence</title>
+  
+  <!-- Font Preconnects (faster than CSS @import) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.cdnfonts.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.cdnfonts.com/css/roobert" rel="stylesheet">
 
-  <!-- Cytoscape from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
-
-  <style>
-    :root {
-      --cb-blue: #0052ff;
-      --cb-blue-hover: #578bfa;
-      --cb-white: #ffffff;
-      --cb-black: #0a0b0d;
-      --cb-gray-surface: #eef0f3;
-      --cb-dark-surface: #282b31;
-      --cb-border: rgba(91, 97, 110, 0.2);
-      --green: #098551;
-      --yellow: #f5b000;
-      --red: #cf2a2a;
-      --radius-pill: 56px;
-      --radius-card: 16px;
-      --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --font-text: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
-      --transition: 0.2s ease;
+  <!-- Miro Design Tokens & Base Styles -->
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/toolbar.css">
+  <link rel="stylesheet" href="styles/toolbar-bottom.css">
+  <link rel="stylesheet" href="styles/sidebar.css">
+  <link rel="stylesheet" href="styles/canvas.css">
+  <link rel="stylesheet" href="styles/panel.css">
+  <link rel="stylesheet" href="styles/tooltips.css">
+  
+  <!-- External Dependencies — CDN FIX: use unpkg with correct versions -->
+  <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+  <script src="https://unpkg.com/cytoscape-gl"></script>
+  <script>
+    // Register cose-bilkent layout plugin
+    if (typeof cytoscape !== 'undefined' && typeof cytoscapeCoseBilkent !== 'undefined') {
+      cytoscape.use(cytoscapeCoseBilkent);
+      console.log('[CDN] cose-bilkent layout registered');
+    } else {
+      console.warn('[CDN] cose-bilkent not loaded, will fallback to cose layout');
     }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: var(--font-text);
-      background-color: var(--cb-black);
-      color: var(--cb-white);
-      height: 100vh;
-      width: 100vw;
-      overflow: hidden;
-      font-size: 16px;
-    }
-
-    /* ─── Layout ─────────────────────────────────────────────────── */
-    #app {
-      display: grid;
-      grid-template-rows: 64px 1fr;
-      grid-template-columns: 280px 1fr 0px;
-      height: 100vh;
-      transition: grid-template-columns 0.3s ease;
-    }
-    #app.panel-open { grid-template-columns: 280px 1fr 380px; }
-
-    /* ─── Header ─────────────────────────────────────────────────── */
-    header {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      background: var(--cb-white);
-      color: var(--cb-black);
-      border-bottom: 1px solid var(--cb-border);
-      z-index: 100;
-    }
-    .header-left { display: flex; align-items: center; gap: 16px; }
-    .logo {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--cb-blue);
-      letter-spacing: -0.5px;
-    }
-    .project-name {
-      font-size: 13px;
-      font-weight: 600;
-      padding: 5px 14px;
-      background: var(--cb-gray-surface);
-      border-radius: var(--radius-pill);
-    }
-    .header-right { display: flex; align-items: center; gap: 10px; }
-    .pill-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      border-radius: var(--radius-pill);
-      font-size: 12px;
-      font-weight: 600;
-      border: 1px solid var(--cb-border);
-      background: var(--cb-white);
-      color: var(--cb-black);
-    }
-    .badge-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-
-    /* ─── Collapse Banner ────────────────────────────────────────── */
-    #collapse-banner {
-      display: none;
-      grid-column: 1 / -1;
-      padding: 10px 24px;
-      background: var(--red);
-      color: var(--cb-white);
-      font-weight: 600;
-      font-size: 13px;
-      text-align: center;
-    }
-    #collapse-banner.visible { display: block; }
-
-    /* ─── Sidebar ────────────────────────────────────────────────── */
-    #sidebar-left {
-      background: var(--cb-black);
-      border-right: 1px solid rgba(255,255,255,0.08);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .sidebar-header {
-      padding: 20px 20px 12px;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--cb-white);
-    }
-    #drift-chart-container { flex: 1; min-height: 160px; position: relative; }
-    #drift-chart { width: 100%; height: 100%; }
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 20px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      font-size: 13px;
-    }
-    .stat-label { color: rgba(255,255,255,0.5); font-weight: 600; }
-    .stat-val { font-family: var(--font-mono); }
-
-    /* ─── Canvas ─────────────────────────────────────────────────── */
-    #graph-container {
-      position: relative;
-      background: var(--cb-black);
-      overflow: hidden;
-    }
-    #cy { width: 100%; height: 100%; }
-
-    /* ─── Loading Overlay ────────────────────────────────────────── */
-    #loading-overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: var(--cb-black);
-      z-index: 50;
-      transition: opacity 0.4s;
-      gap: 16px;
-    }
-    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
-    .spinner {
-      border: 3px solid rgba(255,255,255,0.1);
-      border-top-color: var(--cb-blue);
-      border-radius: 50%;
-      width: 40px; height: 40px;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading-status {
-      color: rgba(255,255,255,0.4);
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    /* ─── Tooltip ────────────────────────────────────────────────── */
-    #tooltip {
-      position: absolute;
-      padding: 10px 14px;
-      background: var(--cb-white);
-      color: var(--cb-black);
-      border-radius: 12px;
-      font-size: 12px;
-      pointer-events: none;
-      opacity: 0;
-      z-index: 200;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      transition: opacity 0.1s;
-      max-width: 260px;
-    }
-    #tooltip.visible { opacity: 1; }
-
-    /* ─── Right Panel ────────────────────────────────────────────── */
-    #panel-right {
-      background: var(--cb-dark-surface);
-      border-left: 1px solid rgba(255,255,255,0.08);
-      overflow-y: auto;
-      display: none;
-      color: var(--cb-white);
-    }
-    #app.panel-open #panel-right { display: block; }
-  </style>
+  </script>
 </head>
 <body>
   <div id="app">
-    <header>
-      <div class="header-left">
-        <span class="logo">CodexMap</span>
-        <span class="project-name" id="project-name">Project</span>
-        <button class="pill-badge" style="cursor:pointer; background:rgba(0,82,255,0.05); border-color:var(--cb-blue); margin-left: 8px;" onclick="CodexExplorer.show()">
-          📂 Project Folder
-        </button>
+    <!-- Top Toolbar -->
+    <header id="toolbar">
+      <div class="toolbar-left">
+        <div class="logo-hexagon">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 2L29.8564 10V26L16 34L2.14359 26V10L16 2Z" fill="#5B76FE"/>
+          </svg>
+        </div>
+        <span class="brand roobert">CodexMap</span>
+        <span class="project-name noto" id="project-display">...</span>
       </div>
-      <div class="header-right">
-        <div class="pill-badge">
-          <span class="badge-dot" id="drift-dot" style="background:#0052ff"></span>
-          <span id="drift-score-text">Health: —</span>
+      
+      <div class="toolbar-center">
+        <span class="toolbar-label noto" style="font-size:12px;color:#a5a8b5">Drift</span>
+        <div id="drift-pill" class="drift-pill grade-a-chip roobert">
+          <span id="drift-score-value">100%</span>
         </div>
-        <div class="pill-badge">
-          <span class="badge-dot" id="status-dot" style="background:#f5b000"></span>
-          <span id="status-text">Connecting…</span>
+        <div class="status-group">
+          <div id="status-dot" class="status-dot idle"></div>
+          <span id="status-text" class="noto">Idle</span>
         </div>
+      </div>
+      
+      <div class="toolbar-right">
+        <div class="agent-pills">
+          <div id="pill-cartographer" class="agent-pill" data-agent="cartographer" title="Cartographer">C</div>
+          <div id="pill-broadcaster" class="agent-pill" data-agent="broadcaster" title="Broadcaster">B</div>
+          <div id="pill-sentinel" class="agent-pill" data-agent="sentinel" title="Sentinel">S</div>
+          <div id="pill-generator" class="agent-pill" data-agent="generator" title="Generator">G</div>
+        </div>
+        <button class="btn-share btn-primary roobert">Share</button>
       </div>
     </header>
 
-    <div id="collapse-banner"></div>
+    <!-- Architectural Collapse Warning -->
+    <div id="collapse-banner" hidden>
+      <div class="banner-content">
+        <span id="collapse-banner-text">⚠ Architectural Collapse Detected — Red node density > 40%</span>
+        <button class="banner-close" onclick="document.getElementById('collapse-banner').hidden = true">✕</button>
+        <button class="btn-primary" onclick="triggerFullReanchor()">Full Re-anchor Sweep</button>
+      </div>
+    </div>
 
-    <aside id="sidebar-left">
-      <div class="sidebar-header">Health Timeline</div>
-      <div id="drift-chart-container"><canvas id="drift-chart"></canvas></div>
-      <div class="stat-row">
-        <span class="stat-label">Current</span>
-        <span class="stat-val" id="stat-current">—</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Peak</span>
-        <span class="stat-val" id="stat-peak">—</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Nodes</span>
-        <span class="stat-val" id="stat-nodes">0</span>
-      </div>
-    </aside>
+    <!-- Main Workspace -->
+    <main id="workspace">
+      <!-- Left Sidebar: Timeline & Feed -->
+      <aside id="sidebar-left">
+        <section class="sidebar-section">
+          <h3 class="section-title roobert">Session Drift</h3>
+          <div class="chart-container">
+            <canvas id="drift-canvas" width="216" height="200"></canvas>
+          </div>
+        </section>
 
-    <main id="graph-container">
-      <div id="cy"></div>
-      <div id="loading-overlay">
-        <div class="spinner"></div>
-        <div id="loading-status">Connecting to backend…</div>
+        <section class="sidebar-section">
+          <h3 class="section-title roobert">API Cost</h3>
+          <div id="api-cost-widget" class="noto" style="font-size:12px; color:#A5A8B5;">
+            Tokens: <span id="api-tokens">0</span><br>
+            Cost: $<span id="api-cost">0.0000</span>
+          </div>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="section-header">
+            <h3 class="section-title roobert">Score Components</h3>
+            <span class="info-trigger">?</span>
+          </div>
+          <div id="score-table-container">
+            <!-- Table injected by JS -->
+          </div>
+        </section>
+
+        <section class="sidebar-section feed-section">
+          <h3 class="section-title roobert">Agent Activity</h3>
+          <div id="agent-logs-container" class="feed-container">
+            <!-- Logs injected by JS -->
+          </div>
+        </section>
+      </aside>
+
+      <!-- Central Canvas -->
+      <div id="canvas-container">
+        <!-- Shimmer skeletons injected by JS -->
       </div>
-      <div id="tooltip">
-        <div id="tt-id" style="font-weight:700; margin-bottom:4px"></div>
-        <div><span id="tt-grade" style="font-weight:600"></span> <span id="tt-score" style="color:#5b616e; margin-left:6px"></span></div>
-      </div>
+
+      <!-- Right Panel: Details -->
+      <aside id="panel-right" hidden>
+        <!-- Content injected by panel.js -->
+      </aside>
     </main>
 
-    <aside id="panel-right"></aside>
+    <!-- Bottom Toolbar -->
+    <footer id="toolbar-bottom">
+      <div class="footer-left">
+        <input type="text" id="node-search" class="noto" placeholder="Search nodes...">
+      </div>
+      
+      <div class="footer-center roobert">
+        <button id="btn-fit" class="footer-btn">Fit View</button>
+        <div class="divider"></div>
+        <button id="btn-zoom-in" class="footer-btn">+</button>
+        <span id="zoom-level">100%</span>
+        <button id="btn-zoom-out" class="footer-btn">−</button>
+      </div>
+      
+      <div class="footer-right roobert">
+        <button class="footer-btn">Layout</button>
+        <button class="footer-btn">Export</button>
+        <button class="footer-btn">Settings</button>
+      </div>
+    </footer>
   </div>
 
+  <!-- Application Logic -->
   <script src="graph.js"></script>
-  <script src="panel.js"></script>
+  <script src="ws.js"></script>
   <script src="drift-timeline.js"></script>
-  <script src="explorer.js"></script>
-
+  <script src="panel.js"></script>
   <script>
-    /* ─── WebSocket State ──────────────────────────────────────── */
-    let ws = null;
-    let reconnectTimer = null;
-    let reconnectAttempts = 0;
-
-    /* ─── Boot ─────────────────────────────────────────────────── */
-    (function boot() {
-      console.log('[CodexMap] Booting…');
-      const params = new URLSearchParams(window.location.search);
-      const name = params.get('project') || 'CodexMap';
-      document.getElementById('project-name').textContent = name;
-      document.title = name + ' — CodexMap';
-
-      try {
-        CodexGraph.init();
-        console.log('[CodexMap] ✅ Graph initialized');
-      } catch(e) {
-        console.error('[CodexMap] ❌ Graph init failed:', e);
-      }
-
-      try {
-        CodexPanel.init();
-        console.log('[CodexMap] ✅ Panel initialized');
-      } catch(e) {
-        console.error('[CodexMap] ❌ Panel init failed:', e);
-      }
-
-      try {
-        DriftTimeline.init();
-        console.log('[CodexMap] ✅ Timeline initialized');
-      } catch(e) {
-        console.error('[CodexMap] ❌ Timeline init failed:', e);
-      }
-
-      try {
-        CodexExplorer.init();
-        console.log('[CodexMap] ✅ Explorer initialized');
-      } catch(e) {
-        console.error('[CodexMap] ❌ Explorer init failed:', e);
-      }
-
-      connectWS();
-    })();
-
-    /* ─── WebSocket ────────────────────────────────────────────── */
-    function connectWS() {
-      const url = 'ws://localhost:4242';
-      console.log('[CodexMap] Connecting to', url);
-      document.getElementById('loading-status').textContent = 'Connecting to backend…';
-
-      try {
-        ws = new WebSocket(url);
-      } catch (e) {
-        console.error('[CodexMap] ❌ WebSocket constructor threw:', e);
-        scheduleReconnect();
-        return;
-      }
-
-      ws.onopen = () => {
-        console.log('[CodexMap] ✅ WebSocket open');
-        reconnectAttempts = 0;
-        document.getElementById('status-dot').style.background = '#098551';
-        document.getElementById('status-text').textContent = 'Live';
-        document.getElementById('loading-status').textContent = 'Waiting for data…';
-      };
-
-      ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data);
-          console.log('[CodexMap] MSG:', msg.type, 
-            msg.payload && msg.payload.nodes ? msg.payload.nodes.length + ' nodes' : '');
-          handleMsg(msg);
-        } catch (e) {
-          console.error('[CodexMap] ❌ Parse error:', e);
-        }
-      };
-
-      ws.onerror = (e) => {
-        console.error('[CodexMap] ❌ WebSocket error:', e);
-      };
-
-      ws.onclose = () => {
-        console.log('[CodexMap] WebSocket closed');
-        document.getElementById('status-dot').style.background = '#cf2a2a';
-        document.getElementById('status-text').textContent = 'Disconnected';
-        scheduleReconnect();
-      };
-    }
-
-    function scheduleReconnect() {
-      if (reconnectTimer) return;
-      reconnectAttempts++;
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 8000);
-      console.log('[CodexMap] Reconnecting in', delay, 'ms…');
-      document.getElementById('loading-status').textContent = 'Reconnecting in ' + (delay/1000) + 's…';
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        connectWS();
-      }, delay);
-    }
-
-    /* ─── Message Handler ──────────────────────────────────────── */
-    function handleMsg(msg) {
-      switch (msg.type) {
-        case 'full_reset':
-          console.log('[CodexMap] full_reset with', 
-            (msg.payload.nodes || []).length, 'nodes,',
-            (msg.payload.edges || []).length, 'edges');
-          CodexGraph.fullReset(msg.payload);
-          document.getElementById('loading-overlay').classList.add('hidden');
-          document.getElementById('stat-nodes').textContent = (msg.payload.nodes || []).length;
-          break;
-
-        case 'graph_update':
-          CodexGraph.applyDiff(msg.payload);
-          break;
-
-        case 'node_grade':
-          CodexGraph.updateGrade(msg.payload);
-          break;
-
-        case 'drift_score':
-          DriftTimeline.addDataPoint(msg.payload);
-          document.getElementById('drift-score-text').textContent = 'Drift: ' + msg.payload.score;
-          document.getElementById('stat-current').textContent = msg.payload.score;
-          document.getElementById('drift-dot').style.background =
-            msg.payload.score > 80 ? '#098551' : msg.payload.score > 50 ? '#f5b000' : '#cf2a2a';
-          break;
-
-        case 'collapse_warning':
-          var banner = document.getElementById('collapse-banner');
-          if (msg.payload && msg.payload.triggered) {
-            banner.classList.add('visible');
-            banner.textContent = '🚨 Architectural Collapse: ' + 
-              (msg.payload.signals || []).join(' · ');
-          } else {
-            banner.classList.remove('visible');
-          }
-          break;
-
-        case 'generation_done':
-          document.getElementById('status-text').textContent = 'Generation complete';
-          break;
-      }
-    }
+    // URL param handling
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectName = urlParams.get('project') || 'DefaultProject';
+    document.getElementById('project-display').textContent = projectName;
   </script>
 </body>
 </html>

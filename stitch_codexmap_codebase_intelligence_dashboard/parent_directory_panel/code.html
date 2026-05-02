@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CODEXMAP_OS - Parent Directory Node Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0a0f12",
+                        "secondary-fixed": "#6bff8f",
+                        "secondary-fixed-dim": "#4ae176",
+                        "tertiary-fixed": "#ffdf9a",
+                        "on-background": "#dee3e8",
+                        "on-surface": "#dee3e8",
+                        "outline-variant": "#3e484f",
+                        "error-container": "#93000a",
+                        "surface-bright": "#343a3e",
+                        "surface-variant": "#303539",
+                        "on-secondary": "#003915",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#251a00",
+                        "secondary": "#4ae176",
+                        "on-primary-fixed-variant": "#004c69",
+                        "on-tertiary-container": "#574000",
+                        "on-secondary-fixed-variant": "#005321",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#252b2e",
+                        "tertiary": "#fdc425",
+                        "surface-container-highest": "#303539",
+                        "primary": "#8ed5ff",
+                        "on-primary": "#00354a",
+                        "primary-fixed": "#c4e7ff",
+                        "tertiary-container": "#dea900",
+                        "on-secondary-fixed": "#002109",
+                        "inverse-on-surface": "#2c3135",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#5a4300",
+                        "outline": "#87929a",
+                        "inverse-primary": "#00668a",
+                        "surface-container": "#1b2024",
+                        "surface-dim": "#0f1418",
+                        "surface-tint": "#7bd0ff",
+                        "inverse-surface": "#dee3e8",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "background": "#0f1418",
+                        "on-secondary-container": "#004119",
+                        "surface-container-low": "#171c20",
+                        "primary-container": "#38bdf8",
+                        "on-surface-variant": "#bdc8d1",
+                        "on-tertiary": "#3f2e00",
+                        "secondary-container": "#00b954",
+                        "on-primary-container": "#004965",
+                        "surface": "#0f1418",
+                        "tertiary-fixed-dim": "#f7be1d",
+                        "on-primary-fixed": "#001e2c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "density-md": "8px",
+                        "gutter": "16px",
+                        "density-high": "4px",
+                        "container-padding": "24px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Space Grotesk"],
+                        "headline-sm": ["Space Grotesk"],
+                        "body-md": ["Inter"],
+                        "display-mono": ["Space Grotesk"],
+                        "code-sm": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["10px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "headline-sm": ["18px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "display-mono": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                        "code-sm": ["12px", {"lineHeight": "1.5", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #080C14;
+            background-image: radial-gradient(#1E293B 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .glass-panel {
+            background: rgba(15, 20, 24, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-active {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+        .scanline-hover:hover {
+            background: linear-gradient(to bottom, transparent 50%, rgba(56, 189, 248, 0.1) 50%);
+            background-size: 100% 4px;
+        }
+        .pulse-critical {
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 180, 171, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0); }
+        }
+    </style>
+</head>
+<body class="text-on-background min-h-screen overflow-hidden font-body-md text-body-md flex flex-col">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-slate-950/60 backdrop-blur-xl docked full-width top-0 border-b border-white/10 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-sky-400 tracking-widest font-['Space_Grotesk'] uppercase tracking-tighter">CODEXMAP_OS</span>
+</div>
+<div class="flex items-center gap-gutter">
+<div class="flex gap-4">
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">sensors</span>
+</button>
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</button>
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded relative">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</div>
+<button class="bg-primary-container/20 text-sky-400 font-bold px-4 py-2 rounded border border-sky-400 hover:bg-sky-400 hover:text-on-primary-container transition-colors flex items-center gap-2 text-label-caps font-label-caps">
+                DRIFT_CRITICAL
+            </button>
+</div>
+</nav>
+<!-- SideNavBar & Main Content Wrapper -->
+<div class="flex flex-1 pt-16">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col z-40 bg-slate-950/80 backdrop-blur-2xl docked left-0 h-full border-r border-white/10 dash-border-r flat font-['Space_Grotesk'] text-xs monospaced">
+<div class="p-4 border-b border-white/5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-surface-container-high rounded flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-sm">hexagon</span>
+</div>
+<div>
+<div class="text-sky-400 font-bold font-headline-sm text-headline-sm">CONTROL_UNIT</div>
+<div class="text-slate-500 font-label-caps text-label-caps">V2.0.4_STABLE</div>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto py-4 flex flex-col gap-1">
+<a class="bg-sky-400/10 text-sky-400 border-r-2 border-sky-400 flex items-center gap-3 px-4 py-3 scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-lg">hub</span>
+                    Network
+                </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-lg">smart_toy</span>
+                    Agents
+                </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-lg">query_stats</span>
+                    Drift_Logs
+                </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-lg">shield</span>
+                    Security
+                </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+                    Settings
+                </a>
+</div>
+<div class="p-4 border-t border-white/5 flex flex-col gap-1">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-sm">description</span>
+                    Docs
+                </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-sm">contact_support</span>
+                    Support
+                </a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 flex-1 flex p-gutter gap-gutter h-[calc(100vh-64px)]">
+<!-- Cytoscape Graph Area (Placeholder for visual context) -->
+<div class="flex-1 glass-panel rounded-lg flex flex-col relative overflow-hidden">
+<!-- Decorative elements for the graph area -->
+<div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: linear-gradient(#38bdf8 1px, transparent 1px), linear-gradient(90deg, #38bdf8 1px, transparent 1px); background-size: 100px 100px;"></div>
+<div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+<div class="w-32 h-32 rounded-full border-2 border-primary/30 flex items-center justify-center">
+<div class="w-24 h-24 rounded-full bg-surface-container-high border border-primary/50 flex items-center justify-center relative glow-active">
+<span class="material-symbols-outlined text-4xl text-primary">folder</span>
+<!-- Connecting lines (simulated) -->
+<div class="absolute w-40 h-[1px] bg-primary/40 -right-40 top-1/2"></div>
+<div class="absolute w-40 h-[1px] bg-primary/40 -left-40 top-1/4 transform -rotate-12"></div>
+<div class="absolute w-40 h-[1px] bg-error/40 -left-40 bottom-1/4 transform rotate-12"></div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-4 left-4 flex gap-2">
+<span class="bg-surface-container px-2 py-1 rounded text-label-caps font-label-caps text-outline flex items-center gap-1 border border-outline-variant">
+<span class="w-2 h-2 rounded-full bg-secondary"></span> HEALTHY
+                     </span>
+<span class="bg-surface-container px-2 py-1 rounded text-label-caps font-label-caps text-outline flex items-center gap-1 border border-outline-variant">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span> DEGRADED
+                     </span>
+<span class="bg-surface-container px-2 py-1 rounded text-label-caps font-label-caps text-outline flex items-center gap-1 border border-outline-variant">
+<span class="w-2 h-2 rounded-full bg-error"></span> CRITICAL
+                     </span>
+</div>
+</div>
+<!-- Right Panel: Parent Directory Node -->
+<div class="w-96 glass-panel rounded-lg flex flex-col border-t-2 border-t-tertiary">
+<!-- Header -->
+<div class="p-4 border-b border-white/5 flex flex-col gap-2 bg-surface-container/50">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-2 text-outline-variant font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-sm">folder_open</span>
+                            DIRECTORY NODE
+                        </div>
+<button class="text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+<div class="font-display-mono text-display-mono text-primary break-all">
+                        /routes/auth/
+                    </div>
+</div>
+<!-- Score & Status Section -->
+<div class="p-6 border-b border-white/5 flex flex-col items-center gap-4">
+<div class="text-center relative">
+<!-- Score Ring -->
+<div class="w-24 h-24 rounded-full border-4 border-surface-container-high relative flex items-center justify-center mx-auto mb-2">
+<!-- Simulated progress border -->
+<div class="absolute inset-[-4px] rounded-full border-4 border-tertiary" style="clip-path: polygon(0 0, 100% 0, 100% 52%, 0 52%);"></div>
+<span class="font-display-mono text-3xl font-bold text-tertiary">0.52</span>
+</div>
+<span class="text-label-caps font-label-caps text-outline uppercase tracking-widest">Aggregate Health</span>
+</div>
+<div class="flex flex-wrap justify-center gap-2 w-full">
+<span class="px-2 py-1 rounded-sm bg-tertiary/10 text-tertiary border border-tertiary/30 font-label-caps text-label-caps flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+                             REVIEW NEEDED
+                         </span>
+<span class="px-2 py-1 rounded-sm bg-surface-container text-outline border border-outline-variant font-label-caps text-label-caps flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]">warning</span>
+                             HIGH_DRIFT
+                         </span>
+</div>
+</div>
+<!-- Child Node Breakdown -->
+<div class="p-4 border-b border-white/5">
+<div class="text-label-caps font-label-caps text-outline mb-2">CHILD NODE DISTRIBUTION</div>
+<!-- Segmented Bar -->
+<div class="h-2 w-full rounded-full flex overflow-hidden bg-surface-container-high mb-2">
+<div class="bg-secondary h-full" style="width: 50%;"></div>
+<div class="bg-tertiary h-full" style="width: 25%;"></div>
+<div class="bg-error h-full" style="width: 25%;"></div>
+</div>
+<!-- Legend/Counts -->
+<div class="flex justify-between text-code-sm font-code-sm">
+<div class="flex items-center gap-1 text-secondary">
+<span class="w-2 h-2 rounded-sm bg-secondary"></span> 2 Green
+                         </div>
+<div class="flex items-center gap-1 text-tertiary">
+<span class="w-2 h-2 rounded-sm bg-tertiary"></span> 1 Yellow
+                         </div>
+<div class="flex items-center gap-1 text-error">
+<span class="w-2 h-2 rounded-sm bg-error"></span> 1 Red
+                         </div>
+</div>
+</div>
+<!-- Riskiest Children List -->
+<div class="p-4 flex-1 overflow-y-auto">
+<div class="text-label-caps font-label-caps text-outline mb-3">PRIORITY REVIEW TARGETS (TOP 3)</div>
+<div class="flex flex-col gap-2">
+<!-- Red Item -->
+<div class="p-3 border border-error/30 bg-error/5 rounded flex justify-between items-center group hover:bg-error/10 transition-colors cursor-pointer pulse-critical">
+<div class="flex flex-col gap-1 overflow-hidden">
+<div class="font-display-mono text-display-mono text-on-surface truncate">login_handler.ts</div>
+<div class="font-label-caps text-label-caps text-error flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]">error</span>
+                                    CRITICAL DRIFT
+                                </div>
+</div>
+<div class="font-display-mono text-display-mono text-error pl-4">0.12</div>
+</div>
+<!-- Yellow Item -->
+<div class="p-3 border border-tertiary/30 bg-tertiary/5 rounded flex justify-between items-center group hover:bg-tertiary/10 transition-colors cursor-pointer">
+<div class="flex flex-col gap-1 overflow-hidden">
+<div class="font-display-mono text-display-mono text-on-surface truncate">session_validator.ts</div>
+<div class="font-label-caps text-label-caps text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]">warning</span>
+                                    MODERATE DRIFT
+                                </div>
+</div>
+<div class="font-display-mono text-display-mono text-tertiary pl-4">0.45</div>
+</div>
+<!-- Green Item (for context) -->
+<div class="p-3 border border-secondary/20 bg-secondary/5 rounded flex justify-between items-center group hover:bg-secondary/10 transition-colors cursor-pointer">
+<div class="flex flex-col gap-1 overflow-hidden">
+<div class="font-display-mono text-display-mono text-on-surface truncate">password_utils.ts</div>
+<div class="font-label-caps text-label-caps text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]">check_circle</span>
+                                    STABLE
+                                </div>
+</div>
+<div class="font-display-mono text-display-mono text-secondary pl-4">0.98</div>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="p-4 border-t border-white/5 bg-surface-container/50">
+<button class="w-full py-3 px-4 border border-primary text-primary font-headline-sm text-headline-sm rounded hover:bg-primary/10 transition-colors scanline-hover flex items-center justify-center gap-2 group">
+<span class="material-symbols-outlined group-hover:rotate-180 transition-transform duration-500">autorenew</span>
+                        HEAL ALL RED CHILDREN
+                    </button>
+</div>
+</div>
+</main>
+</div>
+</body></html>

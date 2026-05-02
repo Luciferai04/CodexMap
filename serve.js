@@ -8,6 +8,7 @@ const url = require('url');
 const { exec } = require('child_process');
 
 const UI_DIR = path.join(__dirname, 'ui');
+const STITCH_DIR = path.join(__dirname, 'stitch_codexmap_codebase_intelligence_dashboard');
 const PORT = 3333;
 
 function getActiveWatchPath() {
@@ -22,15 +23,55 @@ const MIME = {
   '.css':  'text/css',
   '.json': 'application/json',
   '.png':  'image/png',
+  '.jpg':  'image/jpeg',
   '.svg':  'image/svg+xml',
 };
 
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url, true);
-  // Normalize pathname: remove trailing slash and ensure leading slash
   let pathname = parsed.pathname || '/';
-  if (pathname !== '/' && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
   if (pathname === '/') pathname = '/index.html';
+
+  // Handler for /stitch/... routes
+  if (pathname.startsWith('/stitch/')) {
+    const relativePath = pathname.replace('/stitch/', '');
+    const filePath = path.join(STITCH_DIR, relativePath);
+    const ext = path.extname(filePath);
+    const mime = MIME[ext] || 'text/plain';
+
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Stitch file not found: ' + relativePath);
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(data);
+    });
+    return;
+  }
+
+  // Handler for /api/state GET — expose map-state.json
+  if (req.method === 'GET' && pathname === '/api/state') {
+    const statePath = path.join(__dirname, 'shared', 'map-state.json');
+    fs.readFile(statePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('{}'); return; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(data);
+    });
+    return;
+  }
+
+  // Handler for /api/drift-log GET — expose session-drift-log.json
+  if (req.method === 'GET' && pathname === '/api/drift-log') {
+    const driftPath = path.join(__dirname, 'shared', 'session-drift-log.json');
+    fs.readFile(driftPath, (err, data) => {
+      if (err) { res.writeHead(200); res.end('[]'); return; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(data);
+    });
+    return;
+  }
 
   // Handler for /browse GET
   if (req.method === 'GET' && pathname === '/browse') {
@@ -96,13 +137,27 @@ const server = http.createServer((req, res) => {
         const nodeId = payload.nodeId;
         console.log(`[SERVE] 💊 Re-heal requested for ${nodeId}`);
         
-        const queuePath = path.join(__dirname, 'shared', 'reheal-queue.json');
-        let queue = [];
+        const queuePath = path.join(__dirname, 'shared', 'heal-queue.json');
+        let queueData = { queue: [] };
         if (fs.existsSync(queuePath)) {
-          queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+          try {
+            queueData = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+          } catch (e) {
+            queueData = { queue: [] };
+          }
         }
-        queue.push({ nodeId, timestamp: new Date().toISOString() });
-        fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2));
+        
+        // Match the format healer.js expects
+        queueData.queue.push({ 
+          nodeId, 
+          status: 'pending',
+          triggeredBy: 'manual',
+          enqueuedAt: new Date().toISOString(),
+          attemptCount: 0,
+          reanchorOutputFlag: true
+        });
+        
+        fs.writeFileSync(queuePath, JSON.stringify(queueData, null, 2));
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'queued', nodeId }));

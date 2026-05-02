@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodexMap - Node Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Space+Grotesk:wght@500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary": "#8ed5ff",
+                      "primary-fixed": "#c4e7ff",
+                      "on-primary": "#00354a",
+                      "on-error": "#690005",
+                      "outline": "#87929a",
+                      "on-secondary-container": "#004119",
+                      "on-primary-container": "#004965",
+                      "secondary": "#4ae176",
+                      "surface-container-highest": "#303539",
+                      "surface": "#0f1418",
+                      "error-container": "#93000a",
+                      "outline-variant": "#3e484f",
+                      "on-secondary-fixed": "#002109",
+                      "on-background": "#dee3e8",
+                      "primary-container": "#38bdf8",
+                      "on-tertiary-container": "#574000",
+                      "on-surface-variant": "#bdc8d1",
+                      "surface-container-lowest": "#0a0f12",
+                      "inverse-surface": "#dee3e8",
+                      "tertiary-fixed-dim": "#f7be1d",
+                      "secondary-container": "#00b954",
+                      "inverse-on-surface": "#2c3135",
+                      "surface-container": "#1b2024",
+                      "surface-container-high": "#252b2e",
+                      "on-tertiary": "#3f2e00",
+                      "on-primary-fixed-variant": "#004c69",
+                      "tertiary": "#fdc425",
+                      "surface-bright": "#343a3e",
+                      "on-surface": "#dee3e8",
+                      "on-secondary-fixed-variant": "#005321",
+                      "on-error-container": "#ffdad6",
+                      "on-tertiary-fixed-variant": "#5a4300",
+                      "on-primary-fixed": "#001e2c",
+                      "inverse-primary": "#00668a",
+                      "secondary-fixed": "#6bff8f",
+                      "background": "#0f1418",
+                      "tertiary-fixed": "#ffdf9a",
+                      "surface-dim": "#0f1418",
+                      "on-secondary": "#003915",
+                      "surface-container-low": "#171c20",
+                      "tertiary-container": "#dea900",
+                      "on-tertiary-fixed": "#251a00",
+                      "surface-tint": "#7bd0ff",
+                      "secondary-fixed-dim": "#4ae176",
+                      "primary-fixed-dim": "#7bd0ff",
+                      "surface-variant": "#303539",
+                      "error": "#ffb4ab"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "container-padding": "24px",
+                      "gutter": "16px",
+                      "node-gap": "12px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "label-caps": [
+                              "Space Grotesk"
+                      ],
+                      "h1": [
+                              "Space Grotesk"
+                      ],
+                      "mono-data": [
+                              "JetBrains Mono"
+                      ],
+                      "h2": [
+                              "Space Grotesk"
+                      ],
+                      "body": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-caps": [
+                              "11px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.15em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "h1": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "0.1em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "mono-data": [
+                              "13px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "h2": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "letterSpacing": "normal",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: #080C14;
+            background-image: radial-gradient(circle at center, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        
+        @keyframes pulse-error {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0.4); }
+            50% { box-shadow: 0 0 20px 4px rgba(255, 180, 171, 0.2); }
+        }
+        
+        .critical-node {
+            animation: pulse-error 2s infinite;
+        }
+    </style>
+</head>
+<body class="text-on-background font-body min-h-screen flex flex-col md:flex-row">
+<!-- SideNavBar (Suppressed on Mobile, Visible on Web) -->
+<nav class="hidden md:flex flex-col pt-20 pb-4 h-full bg-slate-950/90 backdrop-blur-md fixed left-0 border-r w-64 border-sky-900/30 z-40">
+<div class="px-6 mb-8">
+<h1 class="font-h1 text-h1 text-primary">CodexMap</h1>
+</div>
+<div class="px-4 mb-6">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">terminal</span>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-primary uppercase">OPERATIONS</div>
+<div class="font-mono-data text-mono-data text-outline">[NODE-04]</div>
+</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1 px-2">
+<a class="flex items-center gap-3 bg-sky-500/10 text-sky-400 border-r-2 border-sky-400 py-3 px-4 shadow-[inset_0_0_10px_rgba(56,189,248,0.1)] transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">hub</span>
+<span class="font-label-caps text-label-caps">Network</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 py-3 px-4 hover:bg-white/5 hover:text-sky-200 hover:bg-sky-900/20 transition-colors" href="#">
+<span class="material-symbols-outlined">memory</span>
+<span class="font-label-caps text-label-caps">Agents</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 py-3 px-4 hover:bg-white/5 hover:text-sky-200 hover:bg-sky-900/20 transition-colors" href="#">
+<span class="material-symbols-outlined">database</span>
+<span class="font-label-caps text-label-caps">Drift Logs</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 py-3 px-4 hover:bg-white/5 hover:text-sky-200 hover:bg-sky-900/20 transition-colors" href="#">
+<span class="material-symbols-outlined">verified_user</span>
+<span class="font-label-caps text-label-caps">Security</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 py-3 px-4 hover:bg-white/5 hover:text-sky-200 hover:bg-sky-900/20 transition-colors" href="#">
+<span class="material-symbols-outlined">settings_input_component</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 p-container-padding flex flex-col gap-gutter min-h-screen relative z-10">
+<!-- Header Section -->
+<header class="flex items-center justify-between bg-surface-container/40 backdrop-blur-xl border border-outline-variant p-4 rounded-lg">
+<div class="flex items-center gap-4">
+<button class="p-2 border border-outline-variant rounded-DEFAULT hover:bg-surface-variant transition-colors text-on-surface">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div>
+<h2 class="font-h2 text-h2 text-on-surface">Node Detail: <span class="font-mono-data text-mono-data text-error ml-2 px-2 py-1 bg-error-container/20 rounded">routes/payment.js</span></h2>
+<p class="font-body text-body text-on-surface-variant mt-1">Critical divergence detected in structural anchor.</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 bg-error-container/10 border border-error/30 px-3 py-1.5 rounded-full">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+<span class="font-label-caps text-label-caps text-error">STATUS: CRITICAL</span>
+</div>
+<div class="font-mono-data text-mono-data text-outline-variant">ID: PMT-882-X</div>
+</div>
+</header>
+<!-- Bento Grid Content -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter flex-1">
+<!-- Left Column: Metrics & Actions -->
+<div class="lg:col-span-4 flex flex-col gap-gutter">
+<!-- Primary Score Card -->
+<div class="bg-surface-container/60 backdrop-blur-xl border border-error/50 rounded-lg p-6 critical-node relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-error-container to-error"></div>
+<div class="flex flex-col items-center justify-center py-8">
+<span class="font-label-caps text-label-caps text-error mb-2 tracking-widest">OVERALL DRIFT GRADE</span>
+<div class="font-h1 text-6xl text-error font-black tracking-tighter shadow-error drop-shadow-md">0.28</div>
+<p class="font-body text-body text-on-surface-variant mt-4 text-center">Structural integrity compromised. Immediate re-anchoring advised.</p>
+</div>
+</div>
+<!-- Breakdown Metrics -->
+<div class="bg-surface-container/40 backdrop-blur-md border border-outline-variant rounded-lg p-5">
+<h3 class="font-label-caps text-label-caps text-on-surface mb-4 border-b border-outline-variant pb-2">METRIC BREAKDOWN</h3>
+<div class="flex flex-col gap-4">
+<!-- Metric 1 -->
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-mono-data text-mono-data text-outline">Syntax Alignment</span>
+<span class="font-mono-data text-mono-data text-error">0.15</span>
+</div>
+<div class="w-full bg-surface h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full" style="width: 15%"></div>
+</div>
+</div>
+<!-- Metric 2 -->
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-mono-data text-mono-data text-outline">Logic Cohesion</span>
+<span class="font-mono-data text-mono-data text-error">0.32</span>
+</div>
+<div class="w-full bg-surface h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full" style="width: 32%"></div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-mono-data text-mono-data text-outline">Dependency Graph</span>
+<span class="font-mono-data text-mono-data text-tertiary">0.45</span>
+</div>
+<div class="w-full bg-surface h-1 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 45%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Spacer -->
+<div class="flex-1"></div>
+<!-- Action Button -->
+<button class="w-full bg-error-container hover:bg-error transition-colors text-on-error border border-error font-label-caps text-label-caps py-4 rounded-lg flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,180,171,0.2)]">
+<span class="material-symbols-outlined">sync</span>
+                    RE-ANCHOR THIS NODE
+                </button>
+</div>
+<!-- Right Column: Code Preview & Telemetry -->
+<div class="lg:col-span-8 flex flex-col gap-gutter">
+<!-- Code Preview -->
+<div class="flex-1 bg-[#0d1117] border border-outline-variant rounded-lg flex flex-col overflow-hidden relative group">
+<div class="flex items-center justify-between px-4 py-2 bg-surface-container border-b border-outline-variant">
+<div class="flex gap-2">
+<div class="w-3 h-3 rounded-full bg-error"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary"></div>
+<div class="w-3 h-3 rounded-full bg-secondary"></div>
+</div>
+<div class="font-mono-data text-mono-data text-outline-variant text-[11px]">routes/payment.js</div>
+<button class="text-outline-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+<div class="p-4 overflow-auto flex-1 font-mono-data text-mono-data text-[12px] leading-relaxed relative">
+<!-- Simulated Highlight Overlay -->
+<div class="absolute top-16 left-0 w-full h-8 bg-error/10 border-l-2 border-error pointer-events-none"></div>
+<pre><code class="text-on-surface-variant"><span class="text-tertiary">const</span> express = require(<span class="text-secondary">'express'</span>);
+<span class="text-tertiary">const</span> router = express.Router();
+<span class="text-tertiary">const</span> PaymentService = require(<span class="text-secondary">'../services/payment'</span>);
+
+<span class="text-outline">// DRIFT DETECTED: Legacy validation logic blocking flow</span>
+router.post(<span class="text-secondary">'/process'</span>, <span class="text-tertiary">async</span> (req, res) =&gt; {
+    <span class="text-tertiary">try</span> {
+        <span class="text-tertiary">const</span> { amount, currency, source } = req.body;
+        
+        <span class="text-outline">// EXPECTED: return await PaymentService.charge(req.body);</span>
+<span class="text-error font-bold">        if (!source || source.length &lt; 10) {
+            return res.status(400).json({ error: "Invalid source" });
+        }</span>
+
+        <span class="text-tertiary">const</span> result = <span class="text-tertiary">await</span> PaymentService.charge(amount, currency, source);
+        res.json(result);
+    } <span class="text-tertiary">catch</span> (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+module.exports = router;</code></pre>
+</div>
+</div>
+<!-- Telemetry Graph -->
+<div class="bg-surface-container/40 backdrop-blur-md border border-outline-variant rounded-lg p-5 h-48 flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-label-caps text-label-caps text-on-surface">DEGRADATION TIMELINE (24H)</h3>
+<span class="font-mono-data text-mono-data text-outline text-[10px]">-2.4% / hr</span>
+</div>
+<div class="flex-1 relative border-l border-b border-outline-variant/50 ml-6 mb-4">
+<!-- Abstract Line Graph representation -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<polyline fill="none" points="0,20 20,25 40,35 60,60 80,85 100,95" stroke="#ffb4ab" stroke-width="1" vector-effect="non-scaling-stroke"></polyline>
+<!-- Data Points -->
+<circle cx="0" cy="20" fill="#ffb4ab" r="1.5"></circle>
+<circle cx="20" cy="25" fill="#ffb4ab" r="1.5"></circle>
+<circle cx="40" cy="35" fill="#ffb4ab" r="1.5"></circle>
+<circle cx="60" cy="60" fill="#ffb4ab" r="1.5"></circle>
+<circle cx="80" cy="85" fill="#ffb4ab" r="1.5"></circle>
+<circle class="animate-ping" cx="100" cy="95" fill="#ffb4ab" r="1.5"></circle>
+</svg>
+<!-- Grid Lines -->
+<div class="absolute w-full h-px bg-outline-variant/20 top-1/4"></div>
+<div class="absolute w-full h-px bg-outline-variant/20 top-2/4"></div>
+<div class="absolute w-full h-px bg-outline-variant/20 top-3/4"></div>
+<!-- Y-Axis Labels -->
+<div class="absolute -left-6 top-0 font-mono-data text-mono-data text-outline text-[8px]">1.0</div>
+<div class="absolute -left-6 top-1/2 -translate-y-1/2 font-mono-data text-mono-data text-outline text-[8px]">0.5</div>
+<div class="absolute -left-6 bottom-0 font-mono-data text-mono-data text-outline text-[8px]">0.0</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

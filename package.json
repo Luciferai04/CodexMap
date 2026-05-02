@@ -5,13 +5,19 @@
   "main": "orchestrator.js",
   "scripts": {
     "start": "node orchestrator.js",
-    "test": "bash scripts/integration-test.sh"
+    "dev": "node orchestrator.js --auto-heal",
+    "eval": "node scripts/eval/run-all.js",
+    "clean": "node scripts/clean.js",
+    "install-all": "bash install.sh",
+    "health": "curl -s http://localhost:3000/health | json_pp"
   },
   "dependencies": {
-    "chokidar": "^3.6.0",
-    "ws": "^8.16.0",
     "@babel/parser": "^7.24.0",
-    "cytoscape": "^3.28.1"
+    "@babel/traverse": "^7.29.0",
+    "chokidar": "^3.6.0",
+    "cytoscape": "^3.28.1",
+    "simple-git": "^3.36.0",
+    "ws": "^8.16.0"
   },
   "author": "@Somu.ai",
   "license": "MIT"

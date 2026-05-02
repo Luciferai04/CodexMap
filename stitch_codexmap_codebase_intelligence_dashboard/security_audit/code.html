@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodexMap - Security Audit</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Space+Grotesk:wght@400;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-error-container": "#ffdad6",
+                    "outline-variant": "#3e484f",
+                    "on-secondary": "#003915",
+                    "on-secondary-container": "#004119",
+                    "surface-container-high": "#252b2e",
+                    "secondary": "#4ae176",
+                    "outline": "#87929a",
+                    "surface-container": "#1b2024",
+                    "on-background": "#dee3e8",
+                    "surface-container-lowest": "#0a0f12",
+                    "on-primary": "#00354a",
+                    "background": "#0f1418",
+                    "inverse-on-surface": "#2c3135",
+                    "surface": "#0f1418",
+                    "on-error": "#690005",
+                    "secondary-container": "#00b954",
+                    "error": "#ffb4ab",
+                    "tertiary-fixed-dim": "#f7be1d",
+                    "surface-dim": "#0f1418",
+                    "on-tertiary-fixed": "#251a00",
+                    "on-surface-variant": "#bdc8d1",
+                    "surface-variant": "#303539",
+                    "on-tertiary-container": "#574000",
+                    "on-secondary-fixed-variant": "#005321",
+                    "on-primary-container": "#004965",
+                    "tertiary-fixed": "#ffdf9a",
+                    "inverse-primary": "#00668a",
+                    "primary-fixed": "#c4e7ff",
+                    "surface-container-low": "#171c20",
+                    "on-primary-fixed": "#001e2c",
+                    "on-tertiary": "#3f2e00",
+                    "tertiary": "#fdc425",
+                    "surface-bright": "#343a3e",
+                    "surface-tint": "#7bd0ff",
+                    "primary-fixed-dim": "#7bd0ff",
+                    "on-secondary-fixed": "#002109",
+                    "inverse-surface": "#dee3e8",
+                    "error-container": "#93000a",
+                    "secondary-fixed": "#6bff8f",
+                    "primary": "#8ed5ff",
+                    "on-surface": "#dee3e8",
+                    "on-primary-fixed-variant": "#004c69",
+                    "tertiary-container": "#dea900",
+                    "surface-container-highest": "#303539",
+                    "secondary-fixed-dim": "#4ae176",
+                    "on-tertiary-fixed-variant": "#5a4300",
+                    "primary-container": "#38bdf8"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-padding": "24px",
+                    "density-high": "4px",
+                    "density-md": "8px",
+                    "unit": "4px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "display-mono": [
+                            "Space Grotesk"
+                    ],
+                    "code-sm": [
+                            "Space Grotesk"
+                    ],
+                    "label-caps": [
+                            "Space Grotesk"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-sm": [
+                            "Space Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "display-mono": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "0.1em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "code-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-caps": [
+                            "10px",
+                            {
+                                    "lineHeight": "1",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-sm": [
+                            "18px",
+                            {
+                                    "lineHeight": "1.4",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .dot-grid {
+            background-image: radial-gradient(#1E293B 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen overflow-hidden flex font-body-md text-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-14 bg-slate-950/60 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(8,12,20,0.5)]">
+<div class="text-xl font-black text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] font-['Space_Grotesk'] tracking-widest uppercase">
+            CODEXMAP_SYS
+        </div>
+<div class="flex items-center gap-6">
+<div class="relative hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">search</span>
+<input class="bg-surface-container-lowest border border-white/10 rounded-DEFAULT py-1.5 pl-9 pr-4 text-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary-container focus:shadow-[0_0_8px_rgba(56,189,248,0.3)] transition-all w-64 placeholder:text-slate-600" placeholder="Search system logs..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-sky-400 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90 p-1 rounded-DEFAULT">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-sky-400 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90 p-1 rounded-DEFAULT">
+<span class="material-symbols-outlined">settings_input_component</span>
+</button>
+<button class="text-sky-400 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90 p-1 rounded-DEFAULT relative">
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full animate-pulse"></span>
+<span class="material-symbols-outlined">notifications_active</span>
+</button>
+<img alt="Lead System Architect" class="w-8 h-8 rounded-full border border-sky-400 object-cover shadow-[0_0_8px_rgba(56,189,248,0.4)]" data-alt="A cinematic, high-contrast portrait of a cybersecurity professional in a dimly lit, high-tech server room environment. The subject is softly illuminated by the cold blue and cyan glow of monitor screens and server rack LEDs, creating a moody, authoritative cyberpunk aesthetic. Deep shadows and sharp details emphasize expertise and focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQiWXz7xhDFxQtcV1V1XIodFr6UllEvy_ZD3PCfPQcp9BD9flci3BgzxIGaMluwnZuteFeUho-GFtWgzi27L1nJKkDEsN-5ZMWqkecX2jfE-ac214EI5689VkxnQXFym3Ztk2Wrkh_eROOE3ZUmBSSQ8MlEIPzjHhid3Q5bE8kBqonb9ZMq5MWawF0gwJlZiNtLZUrcgdvr8k8ytw4UlGmJKuoymH-MgSqOQwUM4GbO_U1UJkcgzUwOdJAs0xhcbOYCifU5cf6nrJa"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-14 bottom-0 flex flex-col z-40 bg-slate-950/60 backdrop-blur-xl border-r border-white/10 w-64 shadow-2xl font-['Space_Grotesk'] text-xs font-bold uppercase tracking-tighter">
+<div class="p-6 border-b border-white/10 flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-highest border-2 border-outline-variant mb-3 flex items-center justify-center relative overflow-hidden">
+<img alt="Authorized User" class="w-full h-full object-cover opacity-80" data-alt="A stylized, abstract macro shot of an integrated circuit board illuminated with vivid cyan and dark blue light. The image features sharp, geometric lines of circuitry glowing faintly against a pitch-black background, conveying a sense of deep system access and encrypted digital infrastructure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXcoRn-OYSedSEg0SApsTaEowh2P88XU9BsX5CoJPPHWkqfP1mL_7uLXhkdV6Y1YJJnvjMOi7Kg-sbZXWtHYPVoE2C9QysFyyf0c6wODj4d5Xisuj8LN9O5cE3jS839_f4bHQDh3ZGTgDfaNLkYmNYVo23dEADdR6wFoaIXQk1vKsvPugHQBJEvd2lZtbMzgUxhhy8dyCP3PZX3q6sKs8DGORxt8e-WFCs4nyIKEX6wK01mF28K5QRlaBqRnAiaK1Bz9o4KPt1oc-g"/>
+</div>
+<div class="text-sky-400 font-bold text-sm tracking-widest">NODE_01</div>
+<div class="text-slate-500 mt-1 flex items-center gap-1 justify-center"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> STATUS: ENCRYPTED</div>
+</div>
+<nav class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined text-lg">hub</span> Map_View
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined text-lg">code_blocks</span> Code_Vault
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined text-lg">smart_toy</span> Agent_Stream
+            </a>
+<!-- Active Tab -->
+<a class="bg-sky-400/10 text-sky-400 border-l-4 border-sky-400 px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined text-lg">verified_user</span> Security_Audit
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined text-lg">analytics</span> System_Logs
+            </a>
+</nav>
+<div class="px-4 py-4 border-t border-white/10">
+<button class="w-full py-2.5 bg-transparent border border-sky-400 text-sky-400 hover:bg-sky-400/10 transition-all font-display-mono text-display-mono rounded-sm active:scale-95 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">radar</span> INITIALIZE_SCAN
+            </button>
+</div>
+<div class="border-t border-white/10 py-3 flex flex-col gap-1 bg-surface-container-lowest/50">
+<a class="text-slate-500 px-4 py-2 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer text-[10px]" href="#">
+<span class="material-symbols-outlined text-base">menu_book</span> Documentation
+            </a>
+<a class="text-slate-500 px-4 py-2 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer text-[10px]" href="#">
+<span class="material-symbols-outlined text-base">support_agent</span> Support
+            </a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="flex-1 ml-64 mt-14 p-container-padding h-[calc(100vh-3.5rem)] relative dot-grid overflow-y-auto flex flex-col gap-gutter">
+<!-- Top Alert Bar -->
+<div class="bg-error-container/20 border border-error backdrop-blur-md p-4 rounded-DEFAULT flex items-center gap-4 text-error shadow-[0_0_20px_rgba(255,180,171,0.15)] relative overflow-hidden shrink-0">
+<div class="absolute inset-y-0 left-0 w-1 bg-error animate-pulse"></div>
+<span class="material-symbols-outlined text-3xl animate-pulse" style="font-variation-settings: 'FILL' 1;">warning</span>
+<div class="flex-1">
+<h2 class="font-headline-sm text-headline-sm text-on-error-container tracking-wide mb-1">Active Intrusion Attempt Detected</h2>
+<p class="font-code-sm text-code-sm text-error/80 flex items-center gap-3">
+<span><strong class="text-error">ORIGIN:</strong> 192.168.1.45</span>
+<span class="w-1 h-1 bg-error rounded-full"></span>
+<span><strong class="text-error">TARGET:</strong> node-auth-svc</span>
+<span class="w-1 h-1 bg-error rounded-full"></span>
+<span class="bg-error/20 px-2 py-0.5 rounded-sm text-error border border-error/30 text-[10px] uppercase font-bold tracking-widest">Blocked</span>
+</p>
+</div>
+<button class="px-5 py-2 bg-error text-on-error font-label-caps text-label-caps rounded-sm hover:bg-error/90 transition-colors border border-transparent hover:border-white/20 shadow-[0_0_10px_rgba(255,180,171,0.4)]">
+                QUARANTINE THREAT
+            </button>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-12 gap-gutter flex-1 min-h-0">
+<!-- Left: Vulnerability Map -->
+<div class="col-span-8 bg-surface-container-low/60 backdrop-blur-xl border border-white/10 rounded-lg flex flex-col relative overflow-hidden shadow-lg">
+<div class="p-4 border-b border-white/5 flex items-center justify-between bg-surface-container-lowest/50 shrink-0">
+<h3 class="font-display-mono text-display-mono text-primary-container flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">device_hub</span> VULNERABILITY MAP
+                    </h3>
+<div class="flex gap-2">
+<span class="flex items-center gap-1 font-label-caps text-label-caps text-on-surface-variant"><span class="w-2 h-2 rounded-full bg-error animate-pulse"></span> Critical</span>
+<span class="flex items-center gap-1 font-label-caps text-label-caps text-on-surface-variant"><span class="w-2 h-2 rounded-full bg-tertiary"></span> High</span>
+</div>
+</div>
+<div class="flex-1 relative bg-[#0a0f12]/80 w-full h-full overflow-hidden p-6" style="background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 32px 32px;">
+<!-- Pseudo Cytoscape Nodes -->
+<!-- SVG Edges -->
+<svg class="absolute inset-0 w-full h-full z-0">
+<line stroke="#3e484f" stroke-dasharray="4 4" stroke-width="2" x1="20%" x2="50%" y1="30%" y2="50%"></line>
+<line stroke="#3e484f" stroke-width="2" x1="80%" x2="50%" y1="20%" y2="50%"></line>
+<line class="animate-pulse" stroke="#ffb4ab" stroke-dasharray="4 4" stroke-width="2" x1="50%" x2="70%" y1="50%" y2="80%"></line>
+<line stroke="#3e484f" stroke-width="2" x1="25%" x2="50%" y1="75%" y2="50%"></line>
+</svg>
+<!-- Node 1 (Standard) -->
+<div class="absolute top-[30%] left-[20%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+<div class="w-12 h-12 clip-hexagon bg-surface-container-high border border-outline flex items-center justify-center text-on-surface-variant shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+<span class="material-symbols-outlined text-sm">storage</span>
+</div>
+<span class="font-code-sm text-code-sm text-outline-variant bg-surface-container-lowest px-2 py-0.5 rounded-sm border border-white/5">db-main</span>
+</div>
+<!-- Node 2 (Critical) -->
+<div class="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+<div class="w-16 h-16 clip-hexagon bg-error/10 border-2 border-error flex items-center justify-center text-error shadow-[0_0_25px_rgba(255,180,171,0.4)] animate-pulse relative">
+<div class="absolute inset-0 border border-error rounded-full animate-ping opacity-20"></div>
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">admin_panel_settings</span>
+</div>
+<span class="font-code-sm text-code-sm text-error bg-error-container/20 px-2 py-0.5 rounded-sm border border-error/30 backdrop-blur-sm">auth-svc-prod</span>
+</div>
+<!-- Node 3 (High) -->
+<div class="absolute top-[80%] left-[70%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+<div class="w-14 h-14 clip-hexagon bg-tertiary/10 border-2 border-tertiary flex items-center justify-center text-tertiary shadow-[0_0_15px_rgba(253,196,37,0.3)]">
+<span class="material-symbols-outlined text-lg">api</span>
+</div>
+<span class="font-code-sm text-code-sm text-tertiary bg-tertiary-container/10 px-2 py-0.5 rounded-sm border border-tertiary/30 backdrop-blur-sm">public-api-v2</span>
+</div>
+<!-- Node 4 (Standard) -->
+<div class="absolute top-[20%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+<div class="w-12 h-12 clip-hexagon bg-surface-container-high border border-outline flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">cloud</span>
+</div>
+<span class="font-code-sm text-code-sm text-outline-variant bg-surface-container-lowest px-2 py-0.5 rounded-sm border border-white/5">ext-gateway</span>
+</div>
+<style>
+                        .clip-hexagon {
+                            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+                        }
+                    </style>
+</div>
+</div>
+<!-- Right: Threat Intelligence -->
+<div class="col-span-4 bg-surface-container-low/60 backdrop-blur-xl border border-white/10 rounded-lg flex flex-col overflow-hidden shadow-lg">
+<div class="p-4 border-b border-white/5 bg-surface-container-lowest/50 shrink-0">
+<h3 class="font-display-mono text-display-mono text-primary-container flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">policy</span> THREAT INTELLIGENCE
+                    </h3>
+</div>
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+<!-- Critical CVE -->
+<div class="bg-surface-container border border-error/30 rounded-DEFAULT p-4 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-16 h-16 bg-error/5 rotate-45 translate-x-8 -translate-y-8"></div>
+<div class="flex justify-between items-start mb-3">
+<span class="font-label-caps text-label-caps text-error bg-error/10 px-2 py-1 rounded-sm border border-error/20 flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">error</span> CRITICAL
+                            </span>
+<span class="font-code-sm text-code-sm text-on-surface-variant font-bold">CVE-2023-4199</span>
+</div>
+<h4 class="font-body-md text-body-md text-on-surface font-semibold mb-2">SQL Injection in Auth Service</h4>
+<p class="font-code-sm text-code-sm text-on-surface-variant mb-4 leading-relaxed opacity-80">Unsanitized input detected in `user_login` procedure allowing arbitrary query execution. Exploit payload observed in recent logs.</p>
+<!-- Code Snippet -->
+<div class="bg-[#0a0f12] border border-white/10 border-dashed rounded-DEFAULT p-3 font-code-sm text-code-sm font-['Space_Grotesk'] text-on-surface-variant relative overflow-x-auto">
+<span class="absolute top-0 right-0 bg-white/10 px-2 py-0.5 text-[10px] text-white/50 border-b border-l border-white/10 rounded-bl-DEFAULT tracking-wider uppercase">auth_handler.ts</span>
+<pre class="mt-2"><code class="language-typescript">
+<span class="text-tertiary">const</span> username = req.body.<span class="text-primary-container">user</span>;
+<span class="text-tertiary">const</span> query = <span class="text-secondary-container">`SELECT * FROM users WHERE uname = '${username}'`</span>;
+
+<div class="bg-error/20 border-l-2 border-error pl-2 mt-1 -ml-3 block py-1">
+    <span class="text-outline-variant mr-2">// VULNERABLE EXECUTION</span>
+    db.<span class="text-primary-container">execute</span>(query); 
+</div>
+                            </code></pre>
+</div>
+</div>
+<!-- High Risk -->
+<div class="bg-surface-container border border-tertiary/30 rounded-DEFAULT p-4">
+<div class="flex justify-between items-start mb-3">
+<span class="font-label-caps text-label-caps text-tertiary bg-tertiary/10 px-2 py-1 rounded-sm border border-tertiary/20 flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">warning</span> HIGH
+                            </span>
+<span class="font-code-sm text-code-sm text-on-surface-variant font-bold">CWE-79</span>
+</div>
+<h4 class="font-body-md text-body-md text-on-surface font-semibold mb-2">Cross-Site Scripting (XSS)</h4>
+<p class="font-code-sm text-code-sm text-on-surface-variant mb-4 leading-relaxed opacity-80">Stored XSS vulnerability in user profile description field. Missing output encoding on render.</p>
+<!-- Code Snippet -->
+<div class="bg-[#0a0f12] border border-white/10 border-dashed rounded-DEFAULT p-3 font-code-sm text-code-sm font-['Space_Grotesk'] text-on-surface-variant relative overflow-x-auto">
+<span class="absolute top-0 right-0 bg-white/10 px-2 py-0.5 text-[10px] text-white/50 border-b border-l border-white/10 rounded-bl-DEFAULT tracking-wider uppercase">profile_view.jsx</span>
+<pre class="mt-2"><code class="language-jsx">
+&lt;<span class="text-tertiary">div</span> <span class="text-primary-container">className</span>=<span class="text-secondary-container">"bio"</span>&gt;
+<div class="bg-tertiary/20 border-l-2 border-tertiary pl-2 mt-1 -ml-3 block py-1">
+    <span class="text-tertiary">&lt;div dangerouslySetInnerHTML=</span>{{<span class="text-primary-container">__html</span>: user.bio}} <span class="text-tertiary">/&gt;</span>
+</div>
+&lt;/<span class="text-tertiary">div</span>&gt;
+                            </code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

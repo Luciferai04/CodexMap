@@ -1,3 +1,17 @@
+
+function parseFileToNodes(filePath) {
+
+  const ext = path.extname(filePath);
+  
+  if (BABEL_LANGS.includes(ext)) {
+    return parseBabel(filePath, content);
+  } else if (TREE_SITTER_LANGS[ext]) {
+    return parseTreeSitter(filePath, content, TREE_SITTER_LANGS[ext]);
+  } else {
+    return parseGeneric(filePath, content);
+  }
+}
+
 /**
  * agents/cartographer.js — Agent A2: Filesystem watcher → graph JSON
  * Built by @Somu.ai for the OpenAI Codex Hackathon 2025
@@ -12,12 +26,25 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// ─── @babel/parser for JS/TS AST extraction ────────────────────────────────
-let babelParser;
+const Parser = require('tree-sitter');
+const tsJS   = require('tree-sitter-javascript');
+const tsTS   = require('tree-sitter-typescript').typescript;
+const tsPY   = require('tree-sitter-python');
+const tsGO   = require('tree-sitter-go');
+
+const TREE_SITTER_LANGS = {
+  '.py': tsPY,
+  '.go': tsGO,
+};
+const BABEL_LANGS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+
+
+let babelParser, babelTraverse;
 try {
   babelParser = require('@babel/parser');
+  babelTraverse = require('@babel/traverse').default;
 } catch (e) {
-  console.error('[CARTOGRAPHER] @babel/parser not installed, JS/TS parsing disabled');
+  console.error('[CARTOGRAPHER] Babel tools not installed, JS/TS parsing disabled');
 }
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
@@ -206,32 +233,42 @@ function extractFunctionsFromAST(ast, filePath, fileCode) {
   return functions;
 }
 
-// ─── Parse imports from AST for edge building ───────────────────────────────
-function extractImports(ast, filePath) {
-  const imports = [];
-  if (!ast || !ast.program) return imports;
+// ─── Parse imports/edges from AST for edge building ──────────────────────────
+function extractEdgesFromAST(ast, relativePath) {
+  const edges = [];
+  if (!ast || !babelTraverse) return edges;
 
-  for (const node of ast.program.body) {
-    // ES6 import
-    if (node.type === 'ImportDeclaration' && node.source) {
-      imports.push(node.source.value);
-    }
-    // CommonJS require
-    if (node.type === 'VariableDeclaration') {
-      for (const decl of node.declarations) {
-        if (decl.init && decl.init.type === 'CallExpression') {
-          const callee = decl.init.callee;
-          if (callee && callee.name === 'require' && decl.init.arguments.length > 0) {
-            const arg = decl.init.arguments[0];
-            if (arg.type === 'StringLiteral' || arg.type === 'Literal') {
-              imports.push(arg.value);
-            }
-          }
-        }
+  babelTraverse(ast, {
+    // ESM imports
+    ImportDeclaration({ node }) {
+      if (node.source && node.source.value) {
+        edges.push({ source: relativePath, target: node.source.value });
+      }
+    },
+    // ESM dynamic imports
+    CallExpression({ node }) {
+      if (node.callee.type === 'Import' && node.arguments[0]?.value) {
+        edges.push({ source: relativePath, target: node.arguments[0].value });
+      }
+      // CommonJS require
+      if (node.callee.name === 'require' && node.arguments[0]?.value) {
+        edges.push({ source: relativePath, target: node.arguments[0].value });
+      }
+    },
+    // Export from
+    ExportNamedDeclaration({ node }) {
+      if (node.source && node.source.value) {
+        edges.push({ source: relativePath, target: node.source.value });
+      }
+    },
+    ExportAllDeclaration({ node }) {
+      if (node.source && node.source.value) {
+        edges.push({ source: relativePath, target: node.source.value });
       }
     }
-  }
-  return imports;
+  });
+
+  return edges;
 }
 
 // ─── Line-based fallback parser for non-JS/TS files ────────────────────────
@@ -307,7 +344,104 @@ function extractImportsLineBased(content, filePath) {
 }
 
 // ─── Main: parseFileToNodes ─────────────────────────────────────────────────
-function parseFileToNodes(filePath) {
+
+const BLOCK_VISITORS = {
+  TryStatement(path, state) {
+    state.blocks.push({
+      id: `${state.fileId}::${state.fnName}::try::${path.node.loc?.start.line}`,
+      label: `try block`,
+      type: 'block',
+      blockKind: 'try',
+      parent: state.fnId,
+      lineStart: path.node.loc?.start.line,
+      lineEnd: path.node.handler?.loc?.end.line,
+      code: state.code.slice(
+        path.node.start, 
+        Math.min(path.node.end, path.node.start + 500)
+      ),
+    });
+    if (path.node.handler) {
+      state.blocks.push({
+        id: `${state.fileId}::${state.fnName}::catch::${path.node.handler.loc?.start.line}`,
+        label: `catch (${path.node.handler.param?.name || 'e'})`,
+        type: 'block',
+        blockKind: 'catch',
+        parent: state.fnId,
+        lineStart: path.node.handler.loc?.start.line,
+        lineEnd: path.node.handler.loc?.end.line,
+        code: state.code.slice(path.node.handler.start, 
+          Math.min(path.node.handler.end, path.node.handler.start + 400)),
+      });
+    }
+  },
+  IfStatement(path, state) {
+    if (path.parentPath.isIfStatement()) return;
+    state.blocks.push({
+      id: `${state.fileId}::${state.fnName}::if::${path.node.loc?.start.line}`,
+      label: `if (${extractConditionText(path.node.test, state.code)})`,
+      type: 'block',
+      blockKind: 'if',
+      parent: state.fnId,
+      lineStart: path.node.loc?.start.line,
+      lineEnd: path.node.loc?.end.line,
+      cyclomaticWeight: 1,
+    });
+  },
+  ForStatement:    (path, state) => extractLoopBlock('for',     path, state),
+  WhileStatement:  (path, state) => extractLoopBlock('while',   path, state),
+  ForOfStatement:  (path, state) => extractLoopBlock('for-of',  path, state),
+  ForInStatement:  (path, state) => extractLoopBlock('for-in',  path, state),
+  SwitchStatement(path, state) {
+    state.blocks.push({
+      id: `${state.fileId}::${state.fnName}::switch::${path.node.loc?.start.line}`,
+      label: `switch (${extractConditionText(path.node.discriminant, state.code)})`,
+      type: 'block',
+      blockKind: 'switch',
+      parent: state.fnId,
+      lineStart: path.node.loc?.start.line,
+      lineEnd: path.node.loc?.end.line,
+      cyclomaticWeight: path.node.cases.length,
+    });
+  },
+};
+
+function extractLoopBlock(kind, path, state) {
+  state.blocks.push({
+    id: `${state.fileId}::${state.fnName}::${kind}::${path.node.loc?.start.line}`,
+    label: `${kind} loop`,
+    type: 'block',
+    blockKind: kind,
+    parent: state.fnId,
+    lineStart: path.node.loc?.start.line,
+    lineEnd: path.node.loc?.end.line,
+    cyclomaticWeight: 1,
+  });
+}
+
+function extractConditionText(node, code) {
+  try {
+    return code.slice(node.start, node.end).slice(0, 40);
+  } catch { return '...'; }
+}
+
+function computeCC(funcPath) {
+  let cc = 1;
+  funcPath.traverse({
+    IfStatement:        () => cc++,
+    ConditionalExpression: () => cc++,
+    LogicalExpression:  ({ node }) => { if (node.operator === '&&' || node.operator === '||') cc++; },
+    ForStatement:       () => cc++,
+    ForInStatement:     () => cc++,
+    ForOfStatement:     () => cc++,
+    WhileStatement:     () => cc++,
+    DoWhileStatement:   () => cc++,
+    SwitchCase:         ({ node }) => { if (node.test) cc++; },
+    CatchClause:        () => cc++,
+  });
+  return cc;
+}
+
+function parseBabel(filePath, content) {
   let content;
   try {
     content = fs.readFileSync(filePath, 'utf8');
@@ -321,6 +455,9 @@ function parseFileToNodes(filePath) {
   const language = detectLanguage(filePath);
   const contentHash = computeContentHash(content);
 
+  const dirPath = path.dirname(relativePath);
+  const dirId = dirPath === '.' ? 'root' : dirPath;
+
   // Create file-level node
   const fileNode = {
     id: relativePath,
@@ -332,24 +469,28 @@ function parseFileToNodes(filePath) {
     code: content.slice(0, 2000),
     score: null,
     grade: 'pending',
+    drift_signals: [],
+    pageindex_summary: '',
     contentHash,
     cyclomaticComplexity: null,
     children: [],
     lastUpdated: new Date().toISOString(),
+    parent: dirId
   };
 
   // Create directory node
-  const dirPath = path.dirname(relativePath);
   const dirNode = dirPath && dirPath !== '.' ? {
-    id: dirPath + '/',
-    label: dirPath + '/',
+    id: dirId,
+    label: dirPath,
     type: 'directory',
-    path: dirPath + '/',
+    path: dirPath,
     language: 'directory',
     summary: '',
     code: '',
     score: null,
     grade: 'pending',
+    drift_signals: [],
+    pageindex_summary: '',
     contentHash: '',
     cyclomaticComplexity: null,
     children: [relativePath],
@@ -357,7 +498,7 @@ function parseFileToNodes(filePath) {
   } : null;
 
   let functionNodes = [];
-  let imports = [];
+  let edges = [];
 
   // Parse with Babel for JS/TS, fallback for others
   if (isBabelParseable(filePath) && babelParser) {
@@ -378,18 +519,68 @@ function parseFileToNodes(filePath) {
       // Extract functions
       functionNodes = extractFunctionsFromAST(ast, relativePath, content);
 
+      // Extract block nodes
+      const blocks = [];
+      babelTraverse(ast, {
+        enter(path) {
+          const fnParent = path.getFunctionParent();
+          if (!fnParent) return;
+          
+          let fnName = 'anonymous';
+          if (fnParent.node.id) fnName = fnParent.node.id.name;
+          else if (fnParent.parentPath && fnParent.parentPath.type === 'VariableDeclarator' && fnParent.parentPath.node.id) {
+            fnName = fnParent.parentPath.node.id.name;
+          } else if (fnParent.parentPath && fnParent.parentPath.type === 'MethodDefinition' && fnParent.parentPath.node.key) {
+            fnName = fnParent.parentPath.node.key.name;
+          }
+
+          const state = {
+            fileId: relativePath,
+            fnName,
+            fnId: `${relativePath}::${fnName}`,
+            code: content,
+            blocks
+          };
+          
+          if (BLOCK_VISITORS[path.node.type]) {
+            BLOCK_VISITORS[path.node.type](path, state);
+          }
+        }
+      });
+      
+      // Inject cyclomaticComplexity to function nodes by finding them in AST
+      functionNodes.forEach(fn => {
+        const parts = fn.id.split('::');
+        const fName = parts[parts.length-1];
+        let cc = 1;
+        babelTraverse(ast, {
+          enter(path) {
+            if (path.isFunction() && (path.node.id?.name === fName || (path.parent.id?.name === fName))) {
+               cc = computeCC(path);
+               path.stop();
+            }
+          }
+        });
+        fn.cyclomaticComplexity = cc;
+      });
+
+      functionNodes.push(...blocks);
+
+
       // Extract imports for edge building
-      imports = extractImports(ast, relativePath);
+      edges = extractEdgesFromAST(ast, relativePath);
     } catch (err) {
       console.log(`[CARTOGRAPHER] ⚠ Babel parse error for ${relativePath}: ${err.message}`);
       // Fall back to line-based
       functionNodes = parseFileLineBased(relativePath, content);
-      imports = extractImportsLineBased(content, relativePath);
+      const imps = extractImportsLineBased(content, relativePath);
+      edges = imps.map(target => ({ source: relativePath, target }));
     }
   } else {
     // Line-based fallback parser
     functionNodes = parseFileLineBased(relativePath, content);
-    imports = extractImportsLineBased(content, relativePath);
+    const imps = extractImportsLineBased(content, relativePath);
+    edges = imps.map(target => ({ source: relativePath, target }));
 
     // Simple cyclomatic complexity for non-JS files
     const branchKeywords = content.match(/\b(if|else|elif|for|while|switch|case|catch|except|when)\b/g);
@@ -398,28 +589,6 @@ function parseFileToNodes(filePath) {
 
   // Assign function children to file node
   fileNode.children = functionNodes.map(fn => fn.id);
-
-  // Build edges from imports
-  const edges = [];
-  for (const imp of imports) {
-    // Resolve relative imports to file IDs
-    let targetId = imp;
-    if (imp.startsWith('.')) {
-      targetId = path.normalize(path.join(path.dirname(relativePath), imp));
-      // Try common extensions
-      const exts = ['', '.js', '.ts', '.jsx', '.tsx', '/index.js', '/index.ts'];
-      for (const ext of exts) {
-        const candidate = targetId + ext;
-        // We'll create the edge regardless — Broadcaster handles missing targets
-        targetId = candidate;
-        break;
-      }
-    }
-    edges.push({
-      source: relativePath,
-      target: targetId,
-    });
-  }
 
   const nodes = [fileNode, ...functionNodes];
   if (dirNode) nodes.unshift(dirNode);
@@ -442,8 +611,11 @@ function buildDirectoryStructure(state) {
         label: parentName || 'root',
         type: 'directory',
         parent: parentId,
+        path: dirId,
         grade: 'pending',
         score: null,
+        drift_signals: [],
+        pageindex_summary: ''
       });
     }
 
@@ -530,26 +702,45 @@ function updateMapState(newNodes, newEdges) {
     }
 
     // Merge edges: resolve import targets to actual node IDs
-    // e.g. "./routes" → "routes.ts", "./auth" → "auth.ts"
     const nodeIds = new Set(state.nodes.map(n => n.id));
-    const edgeSet = new Set(state.edges.map(e => `${e.source}→${e.target}`));
+    const edgeMap = new Map();
+    // Load existing edges first to avoid duplicates
+    (state.edges || []).forEach(e => edgeMap.set(`${e.source}→${e.target}`, e));
+
     for (const edge of newEdges) {
-      // Try to resolve target to an existing node ID
       let target = edge.target;
+      // 1. Resolve relative paths
+      if (target.startsWith('.')) {
+        target = path.normalize(path.join(path.dirname(edge.source), target));
+      }
+
+      // 2. Resolve to existing node ID with common extensions
       if (!nodeIds.has(target)) {
-        // Try adding common extensions
-        const candidates = [target + '.ts', target + '.js', target + '.tsx', target + '.jsx'];
+        const candidates = [
+          target, 
+          target + '.ts', target + '.js', target + '.tsx', target + '.jsx',
+          path.join(target, 'index.ts'), path.join(target, 'index.js')
+        ];
         for (const c of candidates) {
           if (nodeIds.has(c)) { target = c; break; }
         }
       }
-      edge.target = target;
-      const key = `${edge.source}→${edge.target}`;
-      if (!edgeSet.has(key) && nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
-        state.edges.push(edge);
-        edgeSet.add(key);
+
+      // 3. Only add if both sides exist and it's not a duplicate
+      if (nodeIds.has(edge.source) && nodeIds.has(target)) {
+        const key = `${edge.source}→${target}`;
+        if (!edgeMap.has(key)) {
+          edgeMap.set(key, { 
+            id: key, 
+            source: edge.source, 
+            target: target,
+            type: 'import',
+            crossContamination: false
+          });
+        }
       }
     }
+    state.edges = Array.from(edgeMap.values());
 
     // Atomic write
     atomicWriteJson(MAP_STATE_PATH, state);
@@ -577,7 +768,16 @@ function createWatcher(dir) {
     if (!['add', 'change'].includes(event)) return;
     try { if (fs.statSync(filePath).isDirectory()) return; } catch (e) { return; }
 
-    console.log(`[CARTOGRAPHER] 📁 File ${event}: ${path.relative(dir, filePath)}`);
+    const relPath = path.relative(dir, filePath);
+    const size = fs.statSync(filePath).size;
+    console.log(`[CARTOGRAPHER] 📁 File ${event}: ${relPath} (${size} bytes)`);
+    
+    // Skip empty files (0 bytes) — they're likely stubs or in-progress writes
+    if (size === 0) {
+      console.log(`[CARTOGRAPHER] ⏭ Skipping empty file: ${relPath}`);
+      return;
+    }
+    
     pendingFiles.add(filePath);
 
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -618,3 +818,78 @@ chokidar.watch(pathMarker).on('change', () => {
 });
 
 console.log('[CARTOGRAPHER] Agent started successfully');
+
+
+
+function parseTreeSitter(filePath, code, Language) {
+  const parser = new Parser();
+  parser.setLanguage(Language);
+  const tree = parser.parse(code);
+  const nodes = [];
+  const fileId = filePath.replace('./', '');
+
+  nodes.push({
+    id: fileId,
+    label: path.basename(filePath),
+    type: 'file',
+    path: filePath,
+    lineCount: code.split('\n').length,
+    code: code.slice(0, 500),
+    grade: 'pending',
+    score: null,
+    language: path.extname(filePath).slice(1),
+  });
+
+  function walk(node, parentId) {
+    const FUNCTION_TYPES = [
+      'function_definition',
+      'function_declaration',
+      'method_definition',
+      'func_literal',
+    ];
+    if (FUNCTION_TYPES.includes(node.type)) {
+      const nameNode = node.childForFieldName?.('name') || 
+                       node.children?.find(c => c.type === 'identifier');
+      const name = nameNode ? code.slice(nameNode.startIndex, nameNode.endIndex) : 'anonymous';
+      const nodeId = `${fileId}::${name}::${node.startPosition.row}`;
+      const funcCode = code.slice(node.startIndex, Math.min(node.endIndex, node.startIndex + 2000));
+
+      nodes.push({
+        id: nodeId,
+        label: name,
+        type: 'function',
+        parent: parentId,
+        path: filePath,
+        lineStart: node.startPosition.row + 1,
+        lineEnd: node.endPosition.row + 1,
+        lineCount: node.endPosition.row - node.startPosition.row + 1,
+        code: funcCode,
+        grade: 'pending',
+        score: null,
+        language: path.extname(filePath).slice(1),
+        cyclomaticComplexity: 1 // fallback for non-JS
+      });
+
+      node.children?.forEach(child => walk(child, nodeId));
+    } else {
+      node.children?.forEach(child => walk(child, parentId));
+    }
+  }
+  walk(tree.rootNode, fileId);
+  return { nodes, edges: [] };
+}
+
+function parseGeneric(filePath, code) {
+  return { nodes: [{
+    id: filePath.replace('./', ''),
+    label: path.basename(filePath),
+    type: 'file',
+    path: filePath,
+    lineCount: code.split('\n').length,
+    code: code.slice(0, 300),
+    grade: 'pending',
+    score: null,
+    language: path.extname(filePath).slice(1) || 'unknown',
+    cyclomaticComplexity: 1
+  }], edges: [] };
+}

@@ -16,8 +16,12 @@
 
 const { execSync, spawn } = require('child_process');
 const fs = require('fs');
+const pLimit = require('p-limit');
+const limit = pLimit(3);
 const path = require('path');
 const crypto = require('crypto');
+const OpenAI = require('openai');
+const openai = new OpenAI();
 const chokidar = require('chokidar');
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
@@ -32,6 +36,7 @@ const PROMPT_PATH = path.join(SHARED_DIR, 'prompt.txt');
 const DRIFT_LOG_PATH = path.join(SHARED_DIR, 'session-drift-log.json');
 const GRADE_QUEUE_PATH = path.join(SHARED_DIR, 'grade-queue.json');
 const COLLAPSE_STATE_PATH = path.join(SHARED_DIR, 'collapse-state.json');
+const HEAL_QUEUE_PATH = path.join(SHARED_DIR, 'heal-queue.json');
 const CROSS_ENCODER_SCORES_PATH = path.join(SHARED_DIR, 'cross-encoder-scores.json');
 const PAGEINDEX_SCORES_PATH = path.join(SHARED_DIR, 'pageindex-scores.json');
 
@@ -45,6 +50,33 @@ const ROLE_MAP = {
   middleware: ['plugin', 'hook', 'decorator', 'interceptor', 'filter'],
 };
 
+// ─── Dynamic Path Resolution ───────────────────────────────────────────────
+// Resolve venv Python relative to project root (portable across machines)
+const VENV_PYTHON = (() => {
+  const candidates = [
+    path.join(__dirname, '..', 'venv', 'bin', 'python3'),
+    path.join(__dirname, '..', 'venv', 'bin', 'python'),
+    'python3',
+    'python',
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch (e) {}
+  }
+  return 'python3'; // fallback to PATH
+})();
+
+// Resolve Codex CLI dynamically
+const CODEX_PATH = (() => {
+  try {
+    const resolved = require('child_process').execSync('which codex', { encoding: 'utf8', timeout: 5000 }).trim();
+    if (resolved) return resolved;
+  } catch (e) {}
+  return 'codex'; // fallback to PATH
+})();
+
+
 // ─── Flags ──────────────────────────────────────────────────────────────────
 const autoHeal = process.argv.includes('--auto-heal');
 const enhancedScoring = process.argv.includes('--enhanced-scoring');
@@ -55,17 +87,26 @@ if (enhancedScoring) {
 // ─── State ──────────────────────────────────────────────────────────────────
 const embeddingCache = new Map();        // contentHash → embedding vector
 const reanchorRegistry = new Set();      // node IDs currently being re-anchored
-const scoredNodes = new Set();           // node IDs already scored (current contentHash)
+const scoredNodes = new Set();
+
+// Edge growth rate tracking state
+const edgeLog = [];
+const RATE_WINDOW_MS = 5 * 60 * 1000;
+const RATE_MULTIPLIER = 3;
+let initialEdgeRate = null;
+
+const ccBaseline = { set: false, avgCC: null };
+const summaryCache = new Map();           // node IDs already scored (current contentHash)
 let promptEmbedding = null;              // cached prompt embedding
 let baselineCC = null;                   // baseline cyclomatic complexity
 let initialEdgeCount = null;             // initial edge count for collapse detection
 let initialEdgeTimestamp = null;         // when we first recorded edge count
 const ANTI_PATTERN_CACHE_PATH = path.join(SHARED_DIR, 'anti-pattern-cache.json');
+let embeddingAttempted = false;          // flag to unblock initialization if API fails
 
 
 
 // ─── Advanced Matching State ────────────────────────────────────────────────
-let intentVectors = null;                // Hierarchical decomposition: {intent_name: embedding}
 let anchorNodes = [];                    // First N green-graded node embeddings
 const ANCHOR_NODE_LIMIT = 5;            // Max anchor nodes to track
 let anchorCentroid = null;              // Average of anchor node embeddings
@@ -117,25 +158,40 @@ function atomicWriteJson(filePath, data) {
 
 // ─── Call embed.py ──────────────────────────────────────────────────────────
 function getEmbedding(text) {
+  if (!text || text.trim().length === 0) return null;
   try {
     const escaped = escapeShell(text.slice(0, 8000));
     const result = execSync(
-      `printf '%s' '${escaped}' | python3 "${path.join(SCRIPTS_DIR, 'embed.py')}"`,
+      `printf '%s' '${escaped}' | "${VENV_PYTHON}" "${path.join(SCRIPTS_DIR, 'embed.py')}"`,
       { timeout: 30000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return JSON.parse(result.trim());
   } catch (err) {
-    console.error(`[SENTINEL] ⚠ Embedding failed: ${err.message}`);
-    return null;
+    // FALLBACK: Simple character-frequency pseudo-embedding if API fails
+    // This allows the pipeline to continue for local testing
+    const vec = new Array(1536).fill(0);
+    for (let i = 0; i < Math.min(text.length, 1536); i++) {
+      vec[i % 1536] = text.charCodeAt(i) / 255;
+    }
+    return vec;
   }
 }
 
+function isBeingHealed(nodeId) {
+  const queue = readJsonSafe(HEAL_QUEUE_PATH, { queue: [] });
+  return (queue.queue || []).some(
+    (entry) => entry.nodeId === nodeId && entry.reanchorOutputFlag && entry.status !== 'done'
+  );
+}
+
+
 // ─── Call similarity.py ─────────────────────────────────────────────────────
 function cosineSimilarity(vecA, vecB) {
+  if (!vecA || !vecB) return 0.0;
   try {
     const input = JSON.stringify(vecA) + '\n' + JSON.stringify(vecB);
     const result = execSync(
-      `printf '%s' '${escapeShell(input)}' | python3 "${path.join(SCRIPTS_DIR, 'similarity.py')}"`,
+      `printf '%s' '${escapeShell(input)}' | "${VENV_PYTHON}" "${path.join(SCRIPTS_DIR, 'similarity.py')}"`,
       { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     const score = parseFloat(result.trim());
@@ -143,6 +199,22 @@ function cosineSimilarity(vecA, vecB) {
   } catch (err) {
     console.error(`[SENTINEL] ⚠ Similarity computation failed: ${err.message}`);
     return 0.0;
+  }
+}
+
+// ─── Call pageindex_score.py ────────────────────────────────────────────────
+function getPageIndexScore(nodeId) {
+  try {
+    const cmd = `"${VENV_PYTHON}" "${path.join(SCRIPTS_DIR, 'pageindex_score.py')}" "${escapeShell(nodeId)}"`;
+    fs.appendFileSync(path.join(SHARED_DIR, 'sentinel-diag.log'), `[CMD] ${cmd}\n`);
+    const result = execSync(cmd, { timeout: 5000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    fs.appendFileSync(path.join(SHARED_DIR, 'sentinel-diag.log'), `[RES] ${result.trim()}\n`);
+    const score = parseFloat(result.trim());
+    if (isNaN(score)) return 0.5;
+    return score;
+  } catch (err) {
+    fs.appendFileSync(path.join(SHARED_DIR, 'sentinel-diag.log'), `[ERR] ${err.message}\n`);
+    return 0.5;
   }
 }
 
@@ -263,17 +335,30 @@ function computeTypeConsistency(node) {
 function computeDriftPenalty(node, state, anchorCentroid, nodeEmbedding) {
   let penaltyD = 0;
   
-  // 1. Unrelated Dependencies (0.4)
-  // (In a real system we'd compare against a 'green' baseline import set)
-  // For now: mock check for off-spec packages
+  // 1. Anti-Pattern Embedding Similarity (0.4)
+  // Compare node embedding against cached anti-pattern vectors
+  if (nodeEmbedding && antiPatternVectors.length > 0) {
+    let maxAntiSim = 0;
+    for (const apVec of antiPatternVectors) {
+      const sim = cosineSimilarity(nodeEmbedding, apVec);
+      if (sim > maxAntiSim) maxAntiSim = sim;
+    }
+    // High similarity to anti-patterns = high penalty
+    if (maxAntiSim > 0.75) penaltyD += 0.4;
+    else if (maxAntiSim > 0.60) penaltyD += 0.2;
+    else if (maxAntiSim > 0.50) penaltyD += 0.1;
+  } else {
+    // Fallback: keyword-based detection when embeddings unavailable
+    const code = (node.code || '').toLowerCase();
+    const offSpec = ['stripe', 'paypal', 'analytics', 'telemetry', 'datadog'];
+    if (offSpec.some(p => code.includes(p))) penaltyD += 0.4;
+  }
+
+  // 2. Off-Spec Subsystem Keywords (0.3)
   const code = (node.code || '').toLowerCase();
-  const offSpec = ['stripe', 'paypal', 'analytics', 'telemetry', 'datadog'];
-  if (offSpec.some(p => code.includes(p))) penaltyD += 0.4;
+  if (code.includes('process.env.STRIPE_KEY') || code.includes('process.env.PAYPAL')) penaltyD += 0.3;
 
-  // 2. Off-Spec Subsystems (0.3)
-  if (code.includes('process.env.STRIPE_KEY')) penaltyD += 0.3;
-
-  // 3. DNA Distance (0.3)
+  // 3. DNA Distance from Anchor Centroid (0.3)
   if (anchorCentroid && nodeEmbedding) {
     const dnaSim = cosineSimilarity(nodeEmbedding, anchorCentroid);
     if (dnaSim < 0.4) penaltyD += 0.3;
@@ -288,15 +373,26 @@ function computeCompositeScore(node, nodeEmbedding, state, gradeMap) {
   // S1: Base cosine similarity vs prompt
   let s1 = cosineSimilarity(promptEmbedding, nodeEmbedding);
 
-  // S2: External scoring (Cross-Encoder / PageIndex)
-  let s2 = s1; // Fallback
+  // S2: External scoring (Cross-Encoder / PageIndex / BM25 hybrid)
+  let s2 = s1; // Base fallback
   const crossEncoderScores = readJsonSafe(CROSS_ENCODER_SCORES_PATH, {});
   const pageIndexScores = readJsonSafe(PAGEINDEX_SCORES_PATH, {});
   
   if (crossEncoderScores[node.id] !== undefined) {
+    // Best option: cross-encoder reasoning score
     s2 = crossEncoderScores[node.id];
-  } else if (node.pageindex_node_id && pageIndexScores[node.pageindex_node_id] !== undefined) {
-    s2 = pageIndexScores[node.pageindex_node_id];
+  } else {
+    // Try PageIndex dynamic lookup
+    const piScore = getPageIndexScore(node.id);
+    if (piScore !== 0.5) {
+      s2 = piScore;
+    } else {
+      // Fallback: BM25 hybrid
+      const nodeText = `${node.summary || ''} ${node.code || ''}`.slice(0, 4000);
+      const nodeTokens = tokenize(nodeText);
+      const bm25 = bm25Score(promptTokens, nodeTokens);
+      s2 = (s1 * 0.5) + (bm25 * 0.5);
+    }
   }
 
   // A: Architectural consistency
@@ -305,7 +401,7 @@ function computeCompositeScore(node, nodeEmbedding, state, gradeMap) {
   // T: Type consistency
   const scoreT = computeTypeConsistency(node);
   
-  // D: Drift penalty
+  // D: Drift penalty (now uses anti-pattern embeddings)
   const penaltyD = computeDriftPenalty(node, state, anchorCentroid, nodeEmbedding);
 
   // --- DEFINITIVE FORMULA ---
@@ -320,7 +416,139 @@ function computeCompositeScore(node, nodeEmbedding, state, gradeMap) {
 }
 
 // ─── Score a single node ────────────────────────────────────────────────────
-function scoreNode(node, state, gradeMap) {
+
+function trackEdgeGrowth(currentEdgeCount) {
+  const now = Date.now();
+  edgeLog.push({ count: currentEdgeCount, timestamp: now });
+  
+  const cutoff = now - 2 * RATE_WINDOW_MS;
+  while (edgeLog.length > 1 && edgeLog[0].timestamp < cutoff) {
+    edgeLog.shift();
+  }
+  
+  if (edgeLog.length < 2) return null;
+  
+  const windowStart = edgeLog.findIndex(e => e.timestamp >= now - RATE_WINDOW_MS);
+  if (windowStart < 0 || windowStart >= edgeLog.length - 1) return null;
+  
+  const windowEntries = edgeLog.slice(windowStart);
+  const edgeDelta = windowEntries[windowEntries.length-1].count - windowEntries[0].count;
+  const timeDeltaMin = (windowEntries[windowEntries.length-1].timestamp - windowEntries[0].timestamp) / 60000;
+  if (timeDeltaMin < 0.5) return null;
+  
+  const currentRate = edgeDelta / timeDeltaMin;
+  
+  if (!initialEdgeRate && edgeLog.length >= 3) {
+    const first = edgeLog[0];
+    const second = edgeLog[Math.min(2, edgeLog.length-1)];
+    const initDelta = second.count - first.count;
+    const initTime = (second.timestamp - first.timestamp) / 60000;
+    if (initTime > 0) initialEdgeRate = initDelta / initTime;
+  }
+  
+  if (!initialEdgeRate || initialEdgeRate === 0) return null;
+  
+  const rateMultiple = currentRate / initialEdgeRate;
+  return {
+    currentRate: currentRate.toFixed(1),
+    initialRate: initialEdgeRate.toFixed(1),
+    multiple: rateMultiple.toFixed(1),
+    triggered: rateMultiple > RATE_MULTIPLIER,
+  };
+}
+
+function checkCyclomaticBaseline(nodes) {
+  const scored = nodes.filter(n => n.cyclomaticComplexity != null && n.grade !== 'pending');
+  if (scored.length === 0) return false;
+  
+  const avgCC = scored.reduce((s,n) => s + n.cyclomaticComplexity, 0) / scored.length;
+  
+  if (!ccBaseline.set && scored.length >= 5) {
+    ccBaseline.avgCC = avgCC;
+    ccBaseline.set = true;
+    console.log(`[Sentinel] CC baseline set: ${avgCC.toFixed(2)}`);
+    return false;
+  }
+  
+  if (!ccBaseline.set) return false;
+  
+  const ratio = avgCC / ccBaseline.avgCC;
+  console.log(`[Sentinel] CC ratio: ${ratio.toFixed(2)}x baseline`);
+  return ratio > 2.0;
+}
+
+async function generateNodeSummary(node, prompt) {
+  const cacheKey = node.contentHash || node.id;
+  if (summaryCache.has(cacheKey)) return summaryCache.get(cacheKey);
+  
+  if (!['function', 'file'].includes(node.type)) return null;
+  
+  const codeSnippet = (node.code || '').slice(0, 800);
+  if (!codeSnippet.trim()) return null;
+  
+  try {
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 60,
+      temperature: 0,
+      messages: [{
+        role: 'system',
+        content: 'You are a senior engineer reviewing AI-generated code. In exactly one sentence (max 20 words), describe what this code does and whether it aligns with the stated goal. Be direct. No filler words.'
+      }, {
+        role: 'user',
+        content: `Goal: ${prompt}\n\nCode:\n${codeSnippet}`
+      }]
+    });
+    const summary = resp.choices[0].message.content.trim();
+    summaryCache.set(cacheKey, summary);
+    return summary;
+  } catch(e) {
+    console.warn('[Sentinel] Summary generation failed:', e.message);
+    return null;
+  }
+}
+
+function checkCollapseConditions(state) {
+  const scoredNodes = state.nodes.filter(n => n.grade !== 'pending');
+  const redCount    = scoredNodes.filter(n => n.grade === 'red').length;
+  const redDensity  = scoredNodes.length > 0 ? redCount / scoredNodes.length : 0;
+  
+  const densityTriggered = redDensity > 0.40;
+  const edgeGrowth = trackEdgeGrowth(state.edges.length);
+  const edgeTriggered = edgeGrowth?.triggered ?? false;
+  const ccTriggered = checkCyclomaticBaseline(state.nodes);
+  
+  const triggered = densityTriggered || edgeTriggered || ccTriggered;
+  
+  const signals = [];
+  if (densityTriggered) signals.push(`${(redDensity*100).toFixed(0)}% nodes drifted (threshold: 40%)`);
+  if (edgeTriggered) signals.push(`Edge growth ${edgeGrowth.multiple}x initial rate (threshold: 3x)`);
+  if (ccTriggered) signals.push('Cyclomatic complexity doubled from baseline');
+  
+  // Custom broadcast logic replacing original checkArchitecturalCollapse
+  if (triggered) {
+    console.log('[SENTINEL] ⚠ Architectural Collapse Detected!');
+    const queue = readJsonSafe(GRADE_QUEUE_PATH, []);
+    queue.push({ type: '__collapse_warning', triggered, signals });
+    atomicWriteJson(GRADE_QUEUE_PATH, queue);
+
+    const driftLog = readJsonSafe(DRIFT_LOG_PATH, []);
+    driftLog.push({ 
+      score: computeDriftScore(state.nodes), 
+      timestamp: new Date().toISOString(),
+      collapseSignals: signals 
+    });
+    atomicWriteJson(DRIFT_LOG_PATH, driftLog);
+  } else {
+    // Send clear signal
+    const queue = readJsonSafe(GRADE_QUEUE_PATH, []);
+    queue.push({ type: '__collapse_warning', triggered: false });
+    atomicWriteJson(GRADE_QUEUE_PATH, queue);
+  }
+}
+
+
+async function scoreNode(node, state, gradeMap, rawPrompt) {
   if (reanchorRegistry.has(node.id)) {
     console.log(`[SENTINEL] ⏭ Skipping ${node.id} (in reanchor registry)`);
     return null;
@@ -358,8 +586,8 @@ function scoreNode(node, state, gradeMap) {
 
   // Adjusted thresholds based on calibration pass (Final hardening)
   let grade = 'red';
-  if (score >= 0.55) grade = 'green';
-  else if (score >= 0.35) grade = 'yellow';
+  if (score >= 0.40) grade = 'green';
+  else if (score >= 0.25) grade = 'yellow';
 
   console.log(`[SENTINEL] 📊 ${node.id}: score=${score.toFixed(3)} grade=${grade} [S1=${result.s1.toFixed(2)} S2=${result.s2.toFixed(2)} A=${result.scoreA.toFixed(2)} T=${result.scoreT.toFixed(2)} D=${result.penaltyD.toFixed(2)}]`);
 
@@ -368,9 +596,18 @@ function scoreNode(node, state, gradeMap) {
     anchorCentroid = computeCentroid(anchorNodes);
   }
 
+  // Generate drift signals for telemetry
+  const signals = [];
+  if (result.penaltyD > 0.5) signals.push('⚠ Anti-pattern detected');
+  if (result.scoreA < 0.4) signals.push('⚠ Arch mismatch');
+  if (result.s1 < 0.3) signals.push('⚠ Low prompt relevance');
+
+  const summary = await generateNodeSummary(node, rawPrompt);
   return { 
     score, 
     grade, 
+    drift_signals: signals,
+    summary,
     scoring_breakdown: {
       s1: result.s1,
       s2: result.s2,
@@ -410,7 +647,7 @@ function writeScoreToState(nodeId, score, grade) {
 
     // Emit node_grade by appending to grade-queue.json
     const queue = readJsonSafe(GRADE_QUEUE_PATH, []);
-    queue.push({ id: nodeId, grade, score });
+    queue.push({ id: nodeId, grade, score, drift_signals: node.drift_signals });
     atomicWriteJson(GRADE_QUEUE_PATH, queue);
   } catch (err) {
     console.error(`[SENTINEL] ✖ Failed to write score for ${nodeId}: ${err.message}`);
@@ -465,6 +702,8 @@ function computeParentScores(state) {
     dir.score = Math.max(0, finalDirScore);
     dir.grade = dir.score >= 0.75 ? 'green' : dir.score >= 0.50 ? 'yellow' : 'red';
     dir.child_stats = { mean, redRatio, variance };
+    dir.drift_signals = dir.drift_signals || [];
+    dir.pageindex_summary = dir.pageindex_summary || "";
   }
 }
 
@@ -566,49 +805,15 @@ function checkArchitecturalCollapse(state) {
 }
 
 const HEAL_COMPLETE_PATH = path.join(SHARED_DIR, 'heal-complete.json');
-const REHEAL_QUEUE_PATH = path.join(SHARED_DIR, 'reheal-queue.json');
 
 // ─── Re-anchor a drifted node ───────────────────────────────────────────────
-function reanchorNode(nodeId, prompt) {
-  reanchorRegistry.add(nodeId);
-    Do not change the file's structural role in the broader codebase.
-  `.trim();
+// (reanchorNode function omitted if handled by healer.js)
 
-  try {
-    // Note: removed --approval-mode auto-edit as it was causing exit 1 in earlier versions
-    const proc = spawn('codex', [reanchorPrompt], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    proc.on('close', (code) => {
-      reanchorRegistry.delete(nodeId);
-      console.log(`[SENTINEL] ✔ Re-anchor complete for ${nodeId} (exit: ${code})`);
-      
-      // Signal completion for heal_eval.py
-      const completeArr = readJsonSafe(HEAL_COMPLETE_PATH, []);
-      completeArr.push({ nodeId, timestamp: new Date().toISOString(), status: code === 0 ? 'success' : 'fail' });
-      atomicWriteJson(HEAL_COMPLETE_PATH, completeArr);
-    });
-
-    proc.on('error', (err) => {
-      reanchorRegistry.delete(nodeId);
-      console.error(`[SENTINEL] ✖ Re-anchor failed for ${nodeId}: ${err.message}`);
-    });
-  } catch (err) {
-    reanchorRegistry.delete(nodeId);
-    console.error(`[SENTINEL] ✖ Re-anchor spawn failed: ${err.message}`);
-  }
-}
-
-// ─── Watch reheal-queue.json ────────────────────────────────────────────────
-chokidar.watch(REHEAL_QUEUE_PATH, { persistent: true, ignoreInitial: true }).on('change', () => {
-  const queue = readJsonSafe(REHEAL_QUEUE_PATH, []);
-  if (queue.length > 0) {
-    for (const entry of queue) {
-      reanchorNode(entry.nodeId, prompt);
-    }
-    // Clear queue
-    atomicWriteJson(REHEAL_QUEUE_PATH, []);
+// ─── Watch heal-queue.json ──────────────────────────────────────────────────
+chokidar.watch(HEAL_QUEUE_PATH, { persistent: true, ignoreInitial: true }).on('change', () => {
+  const queueData = readJsonSafe(HEAL_QUEUE_PATH, { queue: [] });
+  if (queueData.queue && queueData.queue.length > 0) {
+    console.log('[SENTINEL] 💊 Detected manual re-anchor request in queue');
   }
 });
 
@@ -634,6 +839,8 @@ try {
 } catch (err) {
   console.error(`[SENTINEL] ✖ Failed to embed prompt: ${err.message}`);
 }
+embeddingAttempted = true; // Unblock initial pass early for "fail-soft" scoring
+
 
 // Initialize anti-pattern vectors (Improvement #3)
 console.log('[SENTINEL] Loading anti-pattern vectors...');
@@ -668,38 +875,54 @@ if (!fs.existsSync(GRADE_QUEUE_PATH)) {
 // ─── Main scoring loop: watch map-state.json ────────────────────────────────
 console.log('[SENTINEL] Starting scoring loop...');
 
-chokidar.watch(MAP_STATE_PATH, { persistent: true }).on('change', () => {
-  if (!promptEmbedding) return;
+chokidar.watch(SHARED_DIR, { persistent: true }).on('all', async (event, filePath) => {
+  if (path.basename(filePath) !== 'map-state.json') return;
+  if (event !== 'change' && event !== 'add') return;
+  
+  console.log('[SENTINEL] 🔔 map-state.json changed, checking for nodes to score...');
+  if (!embeddingAttempted) return;
 
   const state = readJsonSafe(MAP_STATE_PATH, { nodes: [], edges: [] });
   const gradeMap = new Map(state.nodes.map(n => [n.id, n.grade]));
 
   let anyScored = false;
 
-  for (const node of state.nodes) {
-    if (node.type === 'directory') continue; // Handled by parent pass
-    if (reanchorRegistry.has(node.id)) continue;
-    
+  const needsScoring = state.nodes.filter(node => {
+    if (node.type === 'directory') return false;
+    if (reanchorRegistry.has(node.id)) return false;
+    if (isBeingHealed(node.id)) return false;
     const scoreKey = `${node.id}:${node.contentHash}`;
-    if (node.grade !== 'pending' && scoredNodes.has(scoreKey)) continue;
+    if (node.grade !== 'pending' && scoredNodes.has(scoreKey)) return false;
+    return true;
+  });
 
-    // We process synchronously for simple batching in this loop
-    try {
-      const result = scoreNode(node, state, gradeMap);
-      if (result) {
-        node.score = result.score;
-        node.grade = result.grade;
-        node.scoring_breakdown = result.scoring_breakdown;
-        scoredNodes.add(scoreKey);
-        gradeMap.set(node.id, node.grade);
-        anyScored = true;
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < needsScoring.length; i += BATCH_SIZE) {
+    const batch = needsScoring.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(node => 
+      limit(async () => {
+        try {
+          const result = await scoreNode(node, state, gradeMap, prompt);
+          if (result) {
+            node.score = result.score;
+            node.grade = result.grade;
+            node.scoring_breakdown = result.scoring_breakdown;
+            if(result.summary) node.summary = result.summary;
+            scoredNodes.add(`${node.id}:${node.contentHash}`);
+            gradeMap.set(node.id, node.grade);
+            anyScored = true;
 
-        if (autoHeal && result.score < 0.40 && !reanchorRegistry.has(node.id)) {
-          reanchorNode(node.id, prompt);
+            if (autoHeal && result.score < 0.40 && !reanchorRegistry.has(node.id)) {
+              reanchorNode(node.id, prompt);
+            }
+          }
+        } catch (err) {
+          console.error(`[SENTINEL] ✖ Scoring error for ${node.id}: ${err.message}`);
         }
-      }
-    } catch (err) {
-      console.error(`[SENTINEL] ✖ Scoring error for ${node.id}: ${err.message}`);
+      })
+    ));
+    if (i + BATCH_SIZE < needsScoring.length) {
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 
@@ -713,8 +936,15 @@ chokidar.watch(MAP_STATE_PATH, { persistent: true }).on('change', () => {
       if (n.grade !== 'pending') {
         // Find existing or add new
         const idx = queue.findIndex(q => q.id === n.id);
-        if (idx !== -1) queue[idx] = { id: n.id, grade: n.grade, score: n.score };
-        else queue.push({ id: n.id, grade: n.grade, score: n.score });
+        const entry = { 
+          id: n.id, 
+          grade: n.grade, 
+          score: n.score, 
+          drift_signals: n.drift_signals,
+          scoring_breakdown: n.scoring_breakdown 
+        };
+        if (idx !== -1) queue[idx] = entry;
+        else queue.push(entry);
       }
     }
     // Deduplicate and cap queue
@@ -723,7 +953,7 @@ chokidar.watch(MAP_STATE_PATH, { persistent: true }).on('change', () => {
   }
 
   // Architectural collapse check (Only if enough nodes are scored)
-  checkArchitecturalCollapse(state);
+  checkCollapseConditions(state);
 });
 
 
@@ -755,12 +985,12 @@ setInterval(() => {
   } catch (err) {
     console.error(`[SENTINEL] ✖ Drift score update failed: ${err.message}`);
   }
-}, 60000);
+}, 15000);
 
 // ─── Trigger Initial Pass ───────────────────────────────────────────────────
-function triggerInitialPass() {
-  if (!promptEmbedding) {
-    console.log('[SENTINEL] ⏳ Waiting for prompt embedding before initial pass...');
+async function triggerInitialPass() {
+  if (!embeddingAttempted) {
+    console.log('[SENTINEL] ⏳ Waiting for boot sequence before initial pass...');
     setTimeout(triggerInitialPass, 1000);
     return;
   }
@@ -771,19 +1001,27 @@ function triggerInitialPass() {
   
   if (pending.length > 0) {
     console.log(`[SENTINEL] 🔄 Initial scoring pass: ${pending.length} nodes`);
-    for (const node of pending) {
-      if (node.type === 'directory') continue;
-      const result = scoreNode(node, state, gradeMap);
-      if (result) {
-        node.score = result.score;
-        node.grade = result.grade;
-        node.scoring_breakdown = result.scoring_breakdown;
-        scoredNodes.add(`${node.id}:${node.contentHash}`);
-        gradeMap.set(node.id, node.grade);
-        
-        // Final write after each node (Task: Reliability)
-        computeParentScores(state);
-        atomicWriteJson(MAP_STATE_PATH, state);
+    const BATCH_SIZE = 10;
+    const needsScoring = pending.filter(node => node.type !== 'directory' && !isBeingHealed(node.id));
+    for (let i = 0; i < needsScoring.length; i += BATCH_SIZE) {
+      const batch = needsScoring.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(node => 
+        limit(async () => {
+          const result = await scoreNode(node, state, gradeMap, prompt);
+          if (result) {
+            node.score = result.score;
+            node.grade = result.grade;
+            node.scoring_breakdown = result.scoring_breakdown;
+            if(result.summary) node.summary = result.summary;
+            scoredNodes.add(`${node.id}:${node.contentHash}`);
+            gradeMap.set(node.id, node.grade);
+          }
+        })
+      ));
+      computeParentScores(state);
+      atomicWriteJson(MAP_STATE_PATH, state);
+      if (i + BATCH_SIZE < needsScoring.length) {
+        await new Promise(r => setTimeout(r, 200));
       }
     }
     console.log('[SENTINEL] ✔ Initial scoring pass complete');

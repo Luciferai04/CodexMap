@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CODEXMAP_OS - Loading Agents</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#0a0f12",
+                        "secondary-fixed": "#6bff8f",
+                        "secondary-fixed-dim": "#4ae176",
+                        "tertiary-fixed": "#ffdf9a",
+                        "on-background": "#dee3e8",
+                        "on-surface": "#dee3e8",
+                        "outline-variant": "#3e484f",
+                        "error-container": "#93000a",
+                        "surface-bright": "#343a3e",
+                        "surface-variant": "#303539",
+                        "on-secondary": "#003915",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#251a00",
+                        "secondary": "#4ae176",
+                        "on-primary-fixed-variant": "#004c69",
+                        "on-tertiary-container": "#574000",
+                        "on-secondary-fixed-variant": "#005321",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#252b2e",
+                        "tertiary": "#fdc425",
+                        "surface-container-highest": "#303539",
+                        "primary": "#8ed5ff",
+                        "on-primary": "#00354a",
+                        "primary-fixed": "#c4e7ff",
+                        "tertiary-container": "#dea900",
+                        "on-secondary-fixed": "#002109",
+                        "inverse-on-surface": "#2c3135",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#5a4300",
+                        "outline": "#87929a",
+                        "inverse-primary": "#00668a",
+                        "surface-container": "#1b2024",
+                        "surface-dim": "#0f1418",
+                        "surface-tint": "#7bd0ff",
+                        "inverse-surface": "#dee3e8",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "background": "#0f1418",
+                        "on-secondary-container": "#004119",
+                        "surface-container-low": "#171c20",
+                        "primary-container": "#38bdf8",
+                        "on-surface-variant": "#bdc8d1",
+                        "on-tertiary": "#3f2e00",
+                        "secondary-container": "#00b954",
+                        "on-primary-container": "#004965",
+                        "surface": "#0f1418",
+                        "tertiary-fixed-dim": "#f7be1d",
+                        "on-primary-fixed": "#001e2c"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "unit": "4px",
+                        "density-md": "8px",
+                        "gutter": "16px",
+                        "density-high": "4px",
+                        "container-padding": "24px"
+                    },
+                    fontFamily: {
+                        "label-caps": ["Space Grotesk"],
+                        "headline-sm": ["Space Grotesk"],
+                        "body-md": ["Inter"],
+                        "display-mono": ["Space Grotesk"],
+                        "code-sm": ["Space Grotesk"]
+                    },
+                    fontSize: {
+                        "label-caps": ["10px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-sm": ["18px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "display-mono": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700" }],
+                        "code-sm": ["12px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .dot-grid {
+            background-image: radial-gradient(theme('colors.outline-variant') 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .hexagon {
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+        }
+        /* Implementation for custom style keys that might lack direct standard tailwind equivalents */
+        .flicker-on-hover:hover {
+            animation: flicker 0.15s infinite alternate;
+        }
+        @keyframes flicker {
+            0% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface h-screen w-screen overflow-hidden font-body-md text-body-md flex">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-slate-950/60 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(56,189,248,0.15)] docked full-width top-0">
+<!-- Left: Brand -->
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-sky-400 tracking-widest font-['Space_Grotesk'] uppercase tracking-tighter">CODEXMAP_OS</span>
+</div>
+<!-- Right: Actions -->
+<div class="flex items-center gap-6">
+<!-- Search Bar (on_right) -->
+<div class="relative hidden md:block">
+<span class="material-symbols-outlined absolute left-0 bottom-1 text-outline-variant text-sm" style="font-variation-settings: 'FILL' 0;">search</span>
+<input class="bg-transparent border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 text-on-surface font-code-sm text-code-sm pl-6 py-1 w-48 transition-colors placeholder:text-outline-variant focus:shadow-[0_0_10px_rgba(56,189,248,0.3)]" placeholder="QUERY..." type="text"/>
+</div>
+<!-- Trailing Icons -->
+<div class="flex items-center gap-2">
+<button class="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">sensors</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">terminal</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 relative">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</button>
+</div>
+<!-- Primary Action -->
+<button class="h-8 px-4 border border-primary text-primary font-label-caps text-label-caps hover:bg-primary/20 transition-colors flicker-on-hover duration-75 rounded flex items-center gap-2 shadow-[0_0_10px_rgba(56,189,248,0.2)]">
+<span class="material-symbols-outlined text-[14px]">warning</span>
+                DRIFT_CRITICAL
+            </button>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col z-40 bg-slate-950/80 backdrop-blur-2xl border-r border-white/10 dash-border-r flat docked left-0 h-full font-['Space_Grotesk'] text-xs monospaced">
+<!-- Header -->
+<div class="p-6 border-b border-white/5 flex items-center gap-4">
+<div class="w-10 h-10 hexagon bg-surface-variant flex items-center justify-center border border-white/10 shadow-inner">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">hexagon</span>
+</div>
+<div>
+<div class="text-sky-400 font-bold font-display-mono text-display-mono tracking-widest">CONTROL_UNIT</div>
+<div class="text-outline font-code-sm text-code-sm">V2.0.4_STABLE</div>
+</div>
+</div>
+<!-- Main Tabs -->
+<div class="flex-1 py-4 flex flex-col gap-1">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">hub</span>
+<span class="font-label-caps text-label-caps">Network</span>
+</a>
+<!-- Active Tab based on page intent -->
+<a class="bg-sky-400/10 text-sky-400 border-r-2 border-sky-400 flex items-center gap-3 px-4 py-3 scale-95-active duration-150 relative" href="#">
+<div class="absolute left-0 top-0 bottom-0 w-[1px] bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]"></div>
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+<span class="font-label-caps text-label-caps font-bold">Agents</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">query_stats</span>
+<span class="font-label-caps text-label-caps">Drift_Logs</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">shield</span>
+<span class="font-label-caps text-label-caps">Security</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</div>
+<!-- Footer Tabs -->
+<div class="border-t border-white/5 p-4 flex flex-col gap-1">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 opacity-80" href="#">
+<span class="material-symbols-outlined text-[16px]">description</span>
+<span class="font-label-caps text-label-caps">Docs</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 opacity-80" href="#">
+<span class="material-symbols-outlined text-[16px]">contact_support</span>
+<span class="font-label-caps text-label-caps">Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 mt-16 flex-1 h-[calc(100vh-64px)] relative flex items-center justify-center overflow-hidden">
+<!-- Floor Level 0: Background with Dot Grid -->
+<div class="absolute inset-0 dot-grid opacity-20 z-0"></div>
+<!-- Content Layer -->
+<div class="relative z-10 flex flex-col items-center justify-center gap-12 w-full max-w-4xl">
+<!-- Skeleton Network Graph Simulation -->
+<div class="relative w-[400px] h-[300px] flex items-center justify-center">
+<!-- Connectors (Cytoscape style edges) -->
+<svg class="absolute inset-0 w-full h-full opacity-30" style="z-index: 0;">
+<line class="animate-pulse" stroke="var(--tw-colors-outline-variant)" stroke-dasharray="4 4" stroke-width="1" x1="200" x2="100" y1="150" y2="80"></line>
+<line class="animate-pulse" stroke="var(--tw-colors-outline-variant)" stroke-dasharray="4 4" stroke-width="1" x1="200" x2="320" y1="150" y2="100"></line>
+<line class="animate-pulse" stroke="var(--tw-colors-outline-variant)" stroke-dasharray="4 4" stroke-width="1" x1="200" x2="250" y1="150" y2="250"></line>
+<line class="animate-pulse" stroke="var(--tw-colors-outline-variant)" stroke-dasharray="4 4" stroke-width="1" x1="200" x2="80" y1="150" y2="220"></line>
+</svg>
+<!-- Nodes -->
+<!-- Center Node -->
+<div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 hexagon bg-surface-variant border border-white/5 flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.02)] z-10">
+<div class="w-6 h-6 bg-outline-variant/30 rounded-full animate-pulse"></div>
+</div>
+<!-- Satellite Node 1 -->
+<div class="absolute left-[100px] top-[80px] -translate-x-1/2 -translate-y-1/2 w-12 h-12 hexagon bg-surface-container border border-white/5 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.01)] z-10 opacity-70">
+<div class="w-4 h-4 bg-outline-variant/20 rounded-full animate-pulse" style="animation-delay: 200ms;"></div>
+</div>
+<!-- Satellite Node 2 -->
+<div class="absolute left-[320px] top-[100px] -translate-x-1/2 -translate-y-1/2 w-10 h-10 hexagon bg-surface-container border border-white/5 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.01)] z-10 opacity-60">
+<div class="w-3 h-3 bg-outline-variant/20 rounded-full animate-pulse" style="animation-delay: 400ms;"></div>
+</div>
+<!-- Satellite Node 3 -->
+<div class="absolute left-[250px] top-[250px] -translate-x-1/2 -translate-y-1/2 w-14 h-14 hexagon bg-surface-container border border-white/5 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.01)] z-10 opacity-80">
+<div class="w-5 h-5 bg-outline-variant/20 rounded-full animate-pulse" style="animation-delay: 600ms;"></div>
+</div>
+<!-- Satellite Node 4 -->
+<div class="absolute left-[80px] top-[220px] -translate-x-1/2 -translate-y-1/2 w-10 h-10 hexagon bg-surface-container border border-white/5 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.01)] z-10 opacity-50">
+<div class="w-3 h-3 bg-outline-variant/20 rounded-full animate-pulse" style="animation-delay: 100ms;"></div>
+</div>
+</div>
+<!-- Loading Text Indicator -->
+<div class="flex flex-col items-center gap-3">
+<div class="font-display-mono text-display-mono text-outline animate-pulse tracking-widest uppercase">
+                    Waiting for agents...
+                </div>
+<div class="flex gap-1">
+<div class="w-1.5 h-1.5 bg-outline-variant rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
+<div class="w-1.5 h-1.5 bg-outline-variant rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
+<div class="w-1.5 h-1.5 bg-outline-variant rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

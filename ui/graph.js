@@ -1,268 +1,538 @@
 /**
- * ui/graph.js — Cytoscape.js renderer (Coinbase Theme)
+ * ui/graph.js — Cytoscape.js implementation for CodexMap
+ * Implements Miro design system nodes, edges, and interactions.
+ * 
+ * FIX #3: Uses cy.ready() + node:childless / node:parent selectors
+ *         to ensure compound nodes work correctly with click handlers.
  */
-const CodexGraph = (() => {
-  let cy = null;
-  let currentState = { nodes: [], edges: [] };
+
+window.CodexGraph = (function() {
+  let cy;
+  let tooltip;
+
+  const MIRO_STYLE = [
+    {
+      selector: 'node',
+      style: {
+        'shape': 'roundrectangle',
+        'label': 'data(label)',
+        'font-family': 'Roobert PRO Medium, sans-serif',
+        'font-size': '13px',
+        'font-weight': '500',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-wrap': 'ellipsis',
+        'text-max-width': '140px',
+        'padding': '10px',
+        'border-width': '1.5px',
+        'width': 'label',
+        'height': '40px',
+        'min-width': '80px',
+        'transition-property': 'background-color, border-color, color, opacity',
+        'transition-duration': '0.3s'
+      }
+    },
+    {
+      selector: 'node[grade="green"]',
+      style: {
+        'background-color': '#c3faf5',
+        'border-color': '#187574',
+        'color': '#187574'
+      }
+    },
+    {
+      selector: 'node[grade="yellow"]',
+      style: {
+        'background-color': '#ffe6cd',
+        'border-color': '#d4850a',
+        'color': '#746019'
+      }
+    },
+    {
+      selector: 'node[grade="red"]',
+      style: {
+        'background-color': '#ffc6c6',
+        'border-color': '#600000',
+        'color': '#600000'
+      }
+    },
+    {
+      selector: 'node[grade="pending"]',
+      style: {
+        'background-color': '#f0f0f0',
+        'border-color': '#c7cad5',
+        'color': '#a5a8b5'
+      }
+    },
+    {
+      selector: 'node:parent',
+      style: {
+        'background-color': '#fde0f0',
+        'background-opacity': 0.4,
+        'border-style': 'dashed',
+        'border-width': '1.5px',
+        'border-color': '#c7cad5',
+        'label': 'data(label)',
+        'font-family': 'IBM Plex Mono, monospace',
+        'font-size': '10px',
+        'text-valign': 'top',
+        'text-halign': 'left',
+        'text-margin-y': '-4px',
+        'text-transform': 'uppercase',
+        'shape': 'roundrectangle',
+        'padding': '20px'
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 2,
+        'line-color': '#c7cad5',
+        'target-arrow-color': '#c7cad5',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'target-endpoint': 'outside-node',
+        'source-endpoint': 'outside-node',
+        'arrow-scale': 1.2,
+        'opacity': 0.8,
+        'transition-property': 'line-color, target-arrow-color, opacity',
+        'transition-duration': '0.3s'
+      }
+    },
+    {
+      selector: 'edge[danger]',
+      style: {
+        'line-style': 'dashed',
+        'line-color': '#ff6b6b',
+        'target-arrow-color': '#ff6b6b',
+        'opacity': 1.0,
+        'label': '⚠ drift',
+        'font-family': 'IBM Plex Mono, monospace',
+        'font-size': '10px',
+        'color': '#600000',
+        'text-background-opacity': 1,
+        'text-background-color': '#fff',
+        'text-background-padding': '2px',
+        'text-margin-y': '-10px'
+      }
+    },
+    // FIX #3: dedicated .selected class (not :selected pseudo) for reliable styling
+    {
+      selector: 'node.selected',
+      style: {
+        'border-width': '2.5px',
+        'border-color': '#5b76fe',
+        'overlay-color': '#5b76fe',
+        'overlay-opacity': 0.08
+      }
+    },
+    {
+      selector: 'node.hidden',
+      style: { 'display': 'none' }
+    },
+    {
+      
+    {
+      selector: 'node[type="block"]',
+      style: {
+        'shape': 'hexagon',
+        'background-color': '#f8f9fa',
+        'border-color': '#adb5bd',
+        'border-style': 'dashed',
+        'border-width': '1px',
+        'font-family': 'IBM Plex Mono, monospace',
+        'font-size': '10px',
+        'padding': '5px',
+        'height': '20px'
+      }
+    },
+
+    {
+      selector: 'node.dimmed',
+      style: {
+        'opacity': 0.2,
+        'text-opacity': 0.3
+      }
+    }
+  ];
 
   function init() {
+    const container = document.getElementById('canvas-container');
+    showSkeletons();
+
     cy = cytoscape({
-      container: document.getElementById('cy'),
-      elements: [],
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'label': 'data(label)',
-            'background-color': '#5b616e',
-            'color': '#ffffff',
-            'font-size': '11px',
-            'font-family': '-apple-system, sans-serif',
-            'font-weight': 600,
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'text-margin-y': 6,
-            'width': 36,
-            'height': 36,
-            'border-width': 2,
-            'border-color': 'rgba(255,255,255,0.15)',
-            'text-outline-width': 2,
-            'text-outline-color': '#0a0b0d',
-            'transition-property': 'background-color, border-color',
-            'transition-duration': '0.3s',
-          },
-        },
-        {
-          selector: 'node[type="file"]',
-          style: { 'shape': 'ellipse', 'width': 44, 'height': 44 }
-        },
-        {
-          selector: 'node[type="function"]',
-          style: { 'shape': 'diamond', 'width': 28, 'height': 28, 'font-size': '9px' }
-        },
-        {
-          selector: 'node[type="directory"]',
-          style: {
-            'shape': 'round-rectangle',
-            'background-color': 'rgba(255,255,255,0.03)',
-            'border-color': 'rgba(255,255,255,0.1)',
-            'border-style': 'dashed',
-            'border-width': 1,
-            'padding': 40,
-            'z-index': -1,
-            'color': 'rgba(255,255,255,0.4)',
-            'font-size': '12px',
-            'text-valign': 'top',
-            'text-halign': 'center',
-            'text-margin-y': -10,
-          },
-        },
-        { selector: 'node[grade="green"]',   style: { 'background-color': '#098551', 'border-color': '#0bb06e' } },
-        { selector: 'node[grade="yellow"]',  style: { 'background-color': '#f5b000', 'border-color': '#ffd54f' } },
-        { selector: 'node[grade="red"]',     style: { 'background-color': '#cf2a2a', 'border-color': '#ff5252' } },
-        {
-          selector: 'node[risk_flags]',
-          style: {
-            'border-width': 4,
-            'border-color': '#ff4d4d',
-            'border-style': 'double'
-          }
-        },
-        {
-          selector: 'edge',
-          style: {
-            'width': 1.5,
-            'line-color': 'rgba(255,255,255,0.12)',
-            'target-arrow-color': 'rgba(255,255,255,0.12)',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'arrow-scale': 0.8,
-          },
-        },
-        {
-          selector: 'node:selected',
-          style: { 'border-width': 3, 'border-color': '#0052ff' },
-        },
-      ],
-      layout: { name: 'preset' },
-      wheelSensitivity: 0.3,
+      container: container,
+      renderer: { name: 'gl' },  // WebGL Renderer Fallback
+      layout: { name: 'grid' },
+      wheelSensitivity: 0.2,
       minZoom: 0.1,
-      maxZoom: 5,
+      maxZoom: 3,
+      style: MIRO_STYLE,
+      // Transparent background so CSS dot grid shows through
+      styleEnabled: true,
+      textureOnViewport: false,
+      pixelRatio: 'auto'
     });
 
-    // Click handler
-    cy.on('tap', 'node', function(evt) {
+    // FIX #3: Wait for cy.ready() before registering interactions
+    cy.ready(() => {
+      console.log('[Graph] Cytoscape ready, registering interactions');
+      setupInteractions();
+      setupToolbars();
+    });
+    
+    // Create tooltip element
+    tooltip = document.createElement('div');
+    tooltip.className = 'codex-tooltip';
+    document.body.appendChild(tooltip);
+  }
+
+  function setupInteractions() {
+    // FIX #3: Handle LEAF node click (non-parent / childless nodes)
+    cy.on('dblclick', 'node[type="block"]', (evt) => {
+      cy.animate({ fit: { eles: evt.target, padding: 50 } }, { duration: 300 });
+    });
+
+    cy.on('tap', 'node:childless', (evt) => {
       const node = evt.target;
-      CodexPanel.showNode(node.data());
+      console.log('[Graph] leaf node tapped:', node.id());
+      
+      // Visual feedback — blue ring
       cy.elements().removeClass('selected');
       node.addClass('selected');
       
-      // Premium Polish: Smooth Zoom to Node
-      cy.animate({
-        center: { ele: node },
-        zoom: 1.2,
-        duration: 400,
-        easing: 'ease-in-out-cubic'
-      });
+      window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
     });
-    cy.on('tap', function(evt) {
+
+    // FIX #3: Handle COMPOUND (directory) node click — toggle collapse
+    cy.on('tap', 'node:parent', (evt) => {
+      const node = evt.target;
+      console.log('[Graph] parent node tapped:', node.id());
+      
+      // Also dispatch selection for parent panel
+      window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
+    });
+
+    // Hover tooltip — only on leaf nodes
+    cy.on('mouseover', 'node:childless', (evt) => {
+      showTooltip(evt.target, evt.originalEvent || evt.renderedPosition);
+    });
+    cy.on('mouseout', 'node', () => hideTooltip());
+
+    // FIX #3: Tap on canvas background closes the panel
+    cy.on('tap', (evt) => {
       if (evt.target === cy) {
-        CodexPanel.hide();
         cy.elements().removeClass('selected');
+        if (window.closePanel) window.closePanel();
       }
     });
 
-    // Tooltip
-    const tooltip = document.getElementById('tooltip');
-    cy.on('mouseover', 'node', function(evt) {
-      const d = evt.target.data();
-      const pos = evt.renderedPosition || { x: 0, y: 0 };
-      document.getElementById('tt-id').textContent = d.id || '';
-      document.getElementById('tt-grade').textContent = (d.grade || 'pending').toUpperCase();
-      document.getElementById('tt-grade').style.color =
-        d.grade === 'green' ? '#098551' : d.grade === 'yellow' ? '#f5b000' : d.grade === 'red' ? '#cf2a2a' : '#5b616e';
-      
-      const riskText = (d.risk_flags && d.risk_flags.length > 0) ? ' | Risk: ' + d.risk_flags.join(', ') : '';
-      document.getElementById('tt-score').textContent = (d.score != null ? 'Score: ' + Number(d.score).toFixed(2) : '') + riskText;
-      
-      tooltip.style.left = (pos.x + 15) + 'px';
-      tooltip.style.top = (pos.y + 15) + 'px';
-      tooltip.classList.add('visible');
+    cy.on('zoom', () => {
+      const zoomEl = document.getElementById('zoom-level');
+      if (zoomEl) zoomEl.textContent = Math.round(cy.zoom() * 100) + '%';
     });
-    cy.on('mouseout', 'node', () => tooltip.classList.remove('visible'));
-
-    console.log('[CodexGraph] Initialized');
   }
 
-  function fullReset(state) {
-    console.log('[CodexGraph] fullReset:', state.nodes?.length, 'nodes');
-    currentState = state;
-    cy.elements().remove();
+  function setupToolbars() {
+    document.getElementById('btn-fit')?.addEventListener('click', () => cy.fit(undefined, 40));
+    document.getElementById('btn-zoom-in')?.addEventListener('click', () => {
+      cy.zoom({ level: cy.zoom() * 1.2, position: { x: cy.width() / 2, y: cy.height() / 2 } });
+    });
+    document.getElementById('btn-zoom-out')?.addEventListener('click', () => {
+      cy.zoom({ level: cy.zoom() * 0.8, position: { x: cy.width() / 2, y: cy.height() / 2 } });
+    });
+    
+    // Node search
+    const searchInput = document.getElementById('node-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        if (!query) {
+          cy.elements().removeClass('dimmed');
+          return;
+        }
+        cy.nodes().forEach(n => {
+          const label = (n.data('label') || '').toLowerCase();
+          const id = (n.data('id') || '').toLowerCase();
+          if (label.includes(query) || id.includes(query)) {
+            n.removeClass('dimmed');
+          } else {
+            n.addClass('dimmed');
+          }
+        });
+      });
+    }
+  }
 
+  function showTooltip(node, eventOrPos) {
+    const data = node.data();
+    const grade = data.grade || 'pending';
+    const score = data.score != null ? Math.round(data.score * 100) : '--';
+    
+    tooltip.innerHTML = `
+      <div class="tooltip-title">${data.label || data.id}</div>
+      <div class="tooltip-meta">${data.path || data.id}</div>
+      <div class="tooltip-meta">${data.type || 'file'} · ${data.lineCount || 0} lines</div>
+      <div class="tooltip-grade">
+        <div class="grade-dot" style="background: ${getGradeColor(grade)}"></div>
+        ${grade.toUpperCase()} — ${score}%
+      </div>
+    `;
+    
+    // Position tooltip
+    if (eventOrPos && eventOrPos.clientX != null) {
+      tooltip.style.left = eventOrPos.clientX + 15 + 'px';
+      tooltip.style.top = eventOrPos.clientY - 40 + 'px';
+    } else if (eventOrPos && eventOrPos.x != null) {
+      tooltip.style.left = eventOrPos.x + 15 + 'px';
+      tooltip.style.top = eventOrPos.y - 40 + 'px';
+    }
+    tooltip.classList.add('visible');
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('visible');
+  }
+
+  function getGradeColor(grade) {
+    if (grade === 'green') return '#00b473';
+    if (grade === 'yellow') return '#d4850a';
+    if (grade === 'red') return '#600000';
+    return '#a5a8b5';
+  }
+
+  function pulseRedNode(node) {
+    if (node.data('grade') !== 'red') return;
+    
+    node.animate({
+      style: { 'opacity': 0.65 }
+    }, {
+      duration: 1000,
+      complete: () => {
+        node.animate({
+          style: { 'opacity': 1.0 }
+        }, {
+          duration: 1000,
+          complete: () => {
+            // Only continue pulsing if still red
+            if (node.data('grade') === 'red') pulseRedNode(node);
+          }
+        });
+      }
+    });
+  }
+
+  function showSkeletons() {
+    const container = document.getElementById('canvas-container');
+    const skeleton = document.createElement('div');
+    skeleton.id = 'loading-skeletons';
+    skeleton.className = 'skeleton-container';
+    for (let i = 0; i < 12; i++) {
+      const rect = document.createElement('div');
+      rect.className = 'skeleton-rect';
+      skeleton.appendChild(rect);
+    }
+    container.appendChild(skeleton);
+  }
+
+  function hideSkeletons() {
+    document.getElementById('loading-skeletons')?.remove();
+  }
+
+  function showEmptyState() {
+    hideSkeletons();
+    // Don't wipe the canvas container — Cytoscape owns it.
+    // Instead, add an overlay.
+    let overlay = document.getElementById('empty-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'empty-overlay';
+      overlay.className = 'empty-state';
+      overlay.innerHTML = `
+        <div class="empty-title roobert">No nodes yet</div>
+        <div class="empty-desc noto">Run orchestrator.js to begin mapping your codebase.</div>
+        <div class="empty-code">node orchestrator.js "your prompt"</div>
+      `;
+      document.getElementById('canvas-container').appendChild(overlay);
+    }
+  }
+
+  function hideEmptyState() {
+    document.getElementById('empty-overlay')?.remove();
+  }
+
+  function update(state) {
+    hideSkeletons();
+    
     if (!state.nodes || state.nodes.length === 0) {
-      console.log('[CodexGraph] No nodes to render');
+      showEmptyState();
       return;
     }
+    
+    hideEmptyState();
+    cy.elements().remove();
+    
+    // Separate directory nodes from leaf nodes
+    const parents = state.nodes.filter(n => n.type === 'directory');
+    const children = state.nodes.filter(n => n.type !== 'directory');
 
-    // Add nodes with PARENT support for compound layout
-    const nodeDefs = [];
-    for (const node of state.nodes) {
-      nodeDefs.push({
+    // Add parent (directory) nodes first — Cytoscape requires parents before children
+    parents.forEach(node => {
+      // Skip root if it's the only parent and has no meaningful label
+      const parentRef = node.parent || node.parentId;
+      cy.add({
         group: 'nodes',
         data: {
           id: node.id,
-          parent: node.parent, // ENABLED
+          parent: (parentRef && parentRef !== 'null') ? parentRef : undefined,
           label: node.label || node.id,
-          type: node.type || 'file',
-          path: node.path,
-          language: node.language,
-          summary: node.summary,
-          code: node.code,
-          score: node.score,
+          type: 'directory',
           grade: node.grade || 'pending',
-          contentHash: node.contentHash,
-          cyclomaticComplexity: node.cyclomaticComplexity,
-          risk_flags: node.risk_flags, // PASS RISK FLAGS
+          score: node.score,
+          path: node.path || node.id
         }
       });
-    }
+    });
 
-    console.log('[CodexGraph] Adding', nodeDefs.length, 'nodes');
-    cy.add(nodeDefs);
-
-    // Add edges
-    const edgeDefs = [];
-    for (const edge of (state.edges || [])) {
-      if (cy.getElementById(edge.source).length > 0 && cy.getElementById(edge.target).length > 0) {
-        edgeDefs.push({
-          group: 'edges',
-          data: {
-            id: 'e-' + edge.source + '->' + edge.target,
-            source: edge.source,
-            target: edge.target,
-          }
-        });
-      }
-    }
-    console.log('[CodexGraph] Adding', edgeDefs.length, 'edges');
-    cy.add(edgeDefs);
-
-    runLayout();
-  }
-
-  function applyDiff(payload) {
-    // Update existing nodes
-    for (const node of (payload.nodes || [])) {
-      const el = cy.getElementById(node.id);
-      if (el.length > 0) {
-        el.data({
+    // Add child (file/function) nodes
+    children.forEach(node => {
+      const parentRef = node.parent || node.parentId;
+      // Verify parent exists in cy
+      const parentExists = parentRef && cy.getElementById(parentRef).length > 0;
+      
+      cy.add({
+        group: 'nodes',
+        data: {
+          id: node.id,
+          parent: parentExists ? parentRef : undefined,
           label: node.label || node.id,
+          type: node.type || 'file',
           grade: node.grade || 'pending',
           score: node.score,
           code: node.code,
           summary: node.summary,
-          risk_flags: node.risk_flags, // SYNC
-          scoring_breakdown: node.scoring_breakdown, // SYNC
-        });
-      } else {
-        // New node
-        cy.add({
-          group: 'nodes',
-          data: {
-            id: node.id,
-            parent: node.parent, // SYNC
-            label: node.label || node.id,
-            type: node.type || 'file',
-            path: node.path,
-            language: node.language,
-            summary: node.summary,
-            code: node.code,
-            score: node.score,
-            grade: node.grade || 'pending',
-            risk_flags: node.risk_flags, // SYNC
-            scoring_breakdown: node.scoring_breakdown, // SYNC
-          }
+          lineCount: node.lineCount || (node.code ? node.code.split('\n').length : 0),
+          path: node.path || node.id,
+          S1: node.S1 || node.scoring_breakdown?.s1,
+          S2: node.S2 || node.scoring_breakdown?.s2,
+          A: node.A || node.scoring_breakdown?.a,
+          T: node.T || node.scoring_breakdown?.t,
+          D: node.D || node.scoring_breakdown?.d
+        }
+      });
+    });
+
+    // Add edges — only if both source and target exist
+    (state.edges || []).forEach(edge => {
+      const srcNode = cy.getElementById(edge.source);
+      const tgtNode = cy.getElementById(edge.target);
+      
+      if (srcNode.length === 0 || tgtNode.length === 0) return;
+      
+      const edgeId = `e-${edge.source}-${edge.target}`;
+      if (cy.getElementById(edgeId).length > 0) return; // dedupe
+
+      const srcGrade = srcNode.data('grade');
+      const tgtGrade = tgtNode.data('grade');
+      
+      // Contamination warning: Green flows into Red
+      const isDanger = srcGrade === 'green' && tgtGrade === 'red';
+
+      cy.add({
+        group: 'edges',
+        data: {
+          id: edgeId,
+          source: edge.source,
+          target: edge.target,
+          danger: isDanger || undefined,
+          sourceGrade: srcGrade,
+          targetGrade: tgtGrade
+        }
+      });
+    });
+
+    // Run layout
+    try {
+      if (typeof cytoscape !== 'undefined' && cy.nodes().length > 0) {
+        const layoutName = cy.nodes(':parent').length > 0 ? 'cose-bilkent' : 'cose';
+        cy.layout({
+          name: layoutName,
+          animate: false,
+          nodeDimensionsIncludeLabels: true,
+          idealEdgeLength: 100,
+          nodeRepulsion: 8000
+        }).run();
+      }
+    } catch (e) {
+      console.warn('[Graph] Layout error, falling back to grid:', e.message);
+      cy.layout({ name: 'grid' }).run();
+    }
+    
+    // Pulse red nodes
+    cy.nodes('[grade="red"]').forEach(n => pulseRedNode(n));
+    
+    console.log(`[Graph] Rendered ${cy.nodes().length} nodes, ${cy.edges().length} edges`);
+  }
+
+  function updateGrade(nodeId, grade, score, breakdown) {
+    if (!cy) return;
+    const node = cy.getElementById(nodeId);
+    if (node.length) {
+      node.data({ grade, score });
+      if (breakdown) {
+        node.data({
+          S1: breakdown.s1 ?? breakdown.S1,
+          S2: breakdown.s2 ?? breakdown.S2,
+          A: breakdown.a ?? breakdown.A,
+          T: breakdown.t ?? breakdown.T,
+          D: breakdown.d ?? breakdown.D
         });
       }
-    }
+      if (grade === 'red') pulseRedNode(node);
+      
+      // Update connected edges for contamination warnings
+      node.connectedEdges().forEach(edge => {
+        const sourceId = edge.data('source');
+        const targetId = edge.data('target');
+        const srcGrade = cy.getElementById(sourceId).data('grade');
+        const tgtGrade = cy.getElementById(targetId).data('grade');
+        
+        const isDanger = srcGrade === 'green' && tgtGrade === 'red';
+        edge.data('danger', isDanger || undefined);
+        edge.data('sourceGrade', srcGrade);
+        edge.data('targetGrade', tgtGrade);
+      });
 
-    // Add new edges
-    for (const edge of (payload.edges || [])) {
-      const eid = 'e-' + edge.source + '->' + edge.target;
-      if (cy.getElementById(eid).length === 0 &&
-          cy.getElementById(edge.source).length > 0 &&
-          cy.getElementById(edge.target).length > 0) {
-        cy.add({
-          group: 'edges',
-          data: { id: eid, source: edge.source, target: edge.target }
-        });
+      // If this node is currently selected, re-dispatch to update panel
+      if (node.hasClass('selected')) {
+        window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
       }
     }
-
-    runLayout();
   }
 
-  function updateGrade(payload) {
-    const el = cy.getElementById(payload.id);
-    if (el.length > 0) {
-      el.data('grade', payload.grade);
-      el.data('score', payload.score);
-    }
-  }
+  // Expose a test helper for debugging
+  window.testPanelOpen = function() {
+    const testData = {
+      id: 'test-node', label: 'test.js', path: 'src/test.js',
+      type: 'file', grade: 'red', score: 0.28,
+      code: 'function test() {\n  return 42;\n}',
+      summary: 'Test node for debugging panel interactions',
+      lineCount: 3,
+      S1: 0.45, S2: 0.30, A: 0.20, T: 0.15, D: 0.60
+    };
+    window.dispatchEvent(new CustomEvent('node-selected', { detail: testData }));
+  };
 
-  function runLayout() {
-    if (cy.nodes().length === 0) return;
-    console.log('[CodexGraph] Running layout on', cy.nodes().length, 'nodes');
-    cy.layout({
-      name: 'cose',
-      animate: true,
-      animationDuration: 400,
-      nodeRepulsion: function() { return 8000; },
-      idealEdgeLength: function() { return 80; },
-      padding: 50,
-      fit: true,
-    }).run();
-  }
-
-  return { init, fullReset, applyDiff, updateGrade };
+  return {
+    init,
+    update,
+    updateGrade,
+    isReady: () => !!cy,
+    getCy: () => cy
+  };
 })();
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded', () => {
+  window.CodexGraph.init();
+});

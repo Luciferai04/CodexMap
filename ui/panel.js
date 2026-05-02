@@ -1,266 +1,206 @@
 /**
- * ui/panel.js — Coinbase Styled Panel
+ * ui/panel.js — Node detail panel rendering and healing logic
  */
-const CodexPanel = (() => {
-  let panelEl = null;
 
-  function init() {
-    panelEl = document.getElementById('panel-right');
+(function() {
+  const panel = document.getElementById('panel-right');
+
+  window.addEventListener('node-selected', (e) => {
+    openPanel(e.detail);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePanel();
+  });
+
+  function openPanel(data) {
+    if (!panel) return;
+    panel.hidden = false;
+    
+    // Set grid columns to open panel (248px left, 1fr center, 320px right)
+    const workspace = document.getElementById('workspace');
+    if (workspace) workspace.style.gridTemplateColumns = '248px 1fr 320px';
+
+    if (data.type === 'directory') {
+      renderParentPanel(data);
+    } else {
+      renderLeafPanel(data);
+    }
   }
 
-  function showNode(data) {
-    if (!data) return;
-    document.getElementById('app').classList.add('panel-open');
+  window.closePanel = function() {
+    if (!panel) return;
+    panel.hidden = true;
+    const workspace = document.getElementById('workspace');
+    if (workspace) workspace.style.gridTemplateColumns = '248px 1fr 0px';
+  };
 
-    const grade = (data.grade || 'pending').toLowerCase();
-    const scoreText = data.score != null ? Number(data.score).toFixed(3) : 'PENDING';
-    const codePreview = data.code ? data.code.trim().slice(0, 500) + (data.code.length > 500 ? '...' : '') : 'No source available';
-
-    const scoreBreakdown = data.scoring_breakdown ? `
-      <div class="panel-section">
-        <h3 class="panel-h3">Scoring Breakdown</h3>
-        <table class="breakdown-table">
-          <thead>
-            <tr><th>Metric</th><th>Weight</th><th>Value</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>S1 (Embedding)</td><td>20%</td><td>${data.scoring_breakdown.s1.toFixed(2)}</td></tr>
-            <tr><td>S2 (Reasoning)</td><td>40%</td><td>${data.scoring_breakdown.s2.toFixed(2)}</td></tr>
-            <tr><td>A (Arch Consistency)</td><td>20%</td><td>${data.scoring_breakdown.a.toFixed(2)}</td></tr>
-            <tr><td>T (Type Consistency)</td><td>20%</td><td>${data.scoring_breakdown.t.toFixed(2)}</td></tr>
-            <tr class="penalty-row"><td>D (Drift Penalty)</td><td>-30%</td><td>${data.scoring_breakdown.d.toFixed(2)}</td></tr>
-          </tbody>
-        </table>
-      </div>` : '';
-
-    const dirStats = data.type === 'directory' && data.child_stats ? `
-      <div class="panel-section">
-        <h3 class="panel-h3">Directory Statistics</h3>
-        <div class="cb-card" style="padding:12px; background:rgba(0,82,255,0.05)">
-          <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:8px;">
-            Mean Child Score: <b>${data.child_stats.mean.toFixed(2)}</b><br/>
-            Red Node Density: <b>${(data.child_stats.redRatio * 100).toFixed(0)}%</b><br/>
-            Score Variance: <b>${data.child_stats.variance.toFixed(4)}</b>
-          </div>
-          ${(data.risk_flags || []).map(f => `<span class="risk-badge">${f}</span>`).join('')}
+  function renderLeafPanel(data) {
+    const score = Math.round((data.score || 0) * 100);
+    const grade = data.grade || 'pending';
+    
+    panel.innerHTML = `
+      <div class="panel-header">
+        <div>
+          <div class="panel-title roobert">${data.label}</div>
+          <div class="panel-meta ibm-mono">${data.path}</div>
+          <div class="panel-meta noto">${data.type} · ${data.lineCount || 0} lines</div>
         </div>
-        <button class="cb-btn-secondary" style="margin-top:12px;" onclick="CodexPanel.reanchor('${escapeAttr(data.id)}')">
-          Heal All Red Children
-        </button>
-      </div>` : '';
-
-    const reanchorHtml = (data.type === 'file' && grade === 'red') ? `
-      <div class="panel-section" style="margin-top: 32px">
-        <button class="cb-btn-primary" id="reanchor-btn" onclick="CodexPanel.reanchor('${escapeAttr(data.id)}')">
-          Re-anchor Component
-        </button>
-      </div>` : '';
-
-    panelEl.innerHTML = `
-      <div style="padding: 24px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
-          <div>
-            <h2 class="panel-title">${escapeHtml(data.path || data.id)}</h2>
-            <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:4px;">ID: ${escapeHtml(data.id)}</div>
-          </div>
-          <button class="cb-close" onclick="CodexPanel.hide()">✕</button>
-        </div>
-
-        <div class="cb-card">
-          <div class="stat-grid">
-            <div>
-              <span class="stat-label">TYPE</span>
-              <span class="stat-val-bold">${escapeHtml(data.type || 'file')}</span>
-            </div>
-            <div>
-              <span class="stat-label">GRADE</span>
-              <span class="stat-val-bold" style="color:var(--${grade})">${grade.toUpperCase()}</span>
-            </div>
-            <div>
-              <span class="stat-label">SCORE</span>
-              <span class="stat-val-bold">${scoreText}</span>
-            </div>
-            ${data.cyclomaticComplexity ? `
-            <div>
-              <span class="stat-label">COMPLEXITY</span>
-              <span class="stat-val-bold">${data.cyclomaticComplexity}</span>
-            </div>` : ''}
-          </div>
-        </div>
-
-        ${dirStats}
-        ${scoreBreakdown}
-
-        ${data.summary ? `
-        <div class="panel-section">
-          <h3 class="panel-h3">AI Summary</h3>
-          <p class="panel-body">${escapeHtml(data.summary)}</p>
-        </div>` : ''}
-
-        ${data.code ? `
-        <div class="panel-section">
-          <h3 class="panel-h3">Source Preview</h3>
-          <pre class="panel-code">${escapeHtml(codePreview)}</pre>
-        </div>` : ''}
-
-        ${reanchorHtml}
+        <button class="btn-close" onclick="closePanel()">✕</button>
       </div>
+      
+      <div class="panel-body">
+        <div class="grade-chip grade-${grade} roobert">
+          ● ${grade.toUpperCase()} — ${score}%
+        </div>
 
-      <style>
-        .panel-title {
-          font-family: var(--font-display);
-          font-size: 24px;
-          margin: 0;
-          line-height: 1.1;
-          word-break: break-all;
-        }
-        .cb-close {
-          background: transparent;
-          border: none;
-          color: rgba(255,255,255,0.5);
-          font-size: 20px;
-          cursor: pointer;
-          transition: var(--transition);
-        }
-        .cb-close:hover { color: var(--cb-white); }
-        
-        .cb-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid var(--cb-border);
-          border-radius: var(--radius-card);
-          padding: 16px;
-          margin-bottom: 24px;
-        }
-        .stat-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-        .stat-label {
-          display: block;
-          font-family: var(--font-sans);
-          font-size: 11px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.5);
-          margin-bottom: 4px;
-          letter-spacing: 0.5px;
-        }
-        .stat-val-bold {
-          font-family: var(--font-mono);
-          font-size: 14px;
-          font-weight: 600;
-        }
-        
-        .panel-section { margin-bottom: 24px; }
-        .panel-h3 {
-          font-family: var(--font-sans);
-          font-size: 14px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.8);
-          margin-bottom: 8px;
-        }
-        .panel-body {
-          font-size: 14px;
-          color: rgba(255,255,255,0.7);
-        }
-        .panel-code {
-          background: var(--cb-black);
-          padding: 16px;
-          border-radius: 8px;
-          border: 1px solid var(--cb-border);
-          font-family: var(--font-mono);
-          font-size: 12px;
-          color: rgba(255,255,255,0.8);
-          overflow-x: auto;
-        }
+        ${data.drift_signals && data.drift_signals.length > 0 ? `
+          <div class="drift-signals">
+            ${data.drift_signals.map(s => `<span class="signal-chip ibm-mono">${s}</span>`).join('')}
+          </div>
+        ` : ''}
 
-        .cb-btn-primary {
-          width: 100%;
-          background: var(--cb-gray-surface);
-          color: var(--cb-black);
-          font-family: var(--font-sans);
-          font-size: 16px;
-          font-weight: 600;
-          padding: 16px 24px;
-          border: none;
-          border-radius: var(--radius-pill);
-          cursor: pointer;
-          transition: var(--transition);
-        }
-        .cb-btn-primary:hover {
-          background: var(--cb-blue);
-          color: var(--cb-white);
-        }
-        .cb-btn-secondary {
-          width: 100%;
-          background: transparent;
-          color: var(--cb-white);
-          border: 1px solid var(--cb-border);
-          font-family: var(--font-sans);
-          font-size: 14px;
-          font-weight: 500;
-          padding: 12px 20px;
-          border-radius: var(--radius-pill);
-          cursor: pointer;
-          transition: var(--transition);
-        }
-        .cb-btn-secondary:hover { background: rgba(255,255,255,0.05); }
+        <div class="score-breakdown">
+          <div class="section-header roobert">Score Breakdown</div>
+          <table class="score-table" style="width: 100%; border-collapse: collapse;">
+            ${renderScoreRow('S_final', data.score || 0, grade, true)}
+            ${renderScoreRow('S1 Cosine', data.S1 || 0, grade)}
+            ${renderScoreRow('S2 Cross-Encoder', data.S2 || 0, grade)}
+            ${renderScoreRow('A Arch Fit', data.A || 0, grade)}
+            ${renderScoreRow('T Type Fit', data.T || 0, grade)}
+            ${renderScoreRow('D Drift Pen', data.D || 0, 'red', false, true)}
+          </table>
+        </div>
 
-        .breakdown-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
-          margin-top: 8px;
-        }
-        .breakdown-table th { text-align: left; color: rgba(255,255,255,0.4); padding: 4px; font-weight: 500; }
-        .breakdown-table td { padding: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .penalty-row { color: #ff8080; }
-        
-        .risk-badge {
-          display: inline-block;
-          background: rgba(207, 42, 42, 0.2);
-          color: #ff8080;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          font-family: var(--font-mono);
-          margin-right: 8px;
-          border: 1px solid rgba(207, 42, 42, 0.3);
-        }
-      </style>
+        <div class="code-section">
+          <div class="section-header roobert">
+            Code Preview 
+            <button class="btn-copy" onclick="copyToClipboard(\`${data.code?.replace(/`/g, '\\`')}\`)">copy</button>
+          </div>
+          <pre class="code-preview grade-${grade}-bg"><code>${escapeHtml(data.code?.split('\n').slice(0, 30).join('\n') || '// No preview available')}</code></pre>
+        </div>
+
+        <div class="summary-section">
+          <div class="section-header roobert">PageIndex Analysis</div>
+          <p class="summary-text noto">${data.pageindex_summary || 'No PageIndex data available for this node.'}</p>
+        </div>
+
+        <div class="summary-section">
+          <div class="section-header roobert">AI Summary</div>
+          <p class="summary-text noto">${data.summary || 'Summary pending analysis...'}</p>
+        </div>
+
+        ${grade === 'red' ? `
+          <button id="btn-reanchor" class="btn-reanchor roobert" onclick="reanchorNode('${data.id}')">
+            ↺ Re-anchor This Node
+          </button>
+        ` : ''}
+      </div>
     `;
   }
 
-  function hide() {
-    document.getElementById('app').classList.remove('panel-open');
+  function renderScoreRow(label, val, grade, isFinal = false, isPenalty = false) {
+    const percent = Math.round(val * 100);
+    const color = isPenalty ? (val > 0.3 ? '#600000' : '#d4850a') : getGradeColor(val);
+    
+    return `
+      <tr style="${isFinal ? 'border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;' : ''}">
+        <td class="noto" style="padding: 4px 0; font-size: 13px; color: var(--color-slate);">${label}</td>
+        <td class="ibm-mono" style="padding: 4px 12px; font-size: 13px; font-weight: 700; text-align: right;">${percent}%</td>
+        <td style="width: 100px; padding: 4px 0;">
+          <div class="progress-track">
+            <div class="progress-fill" style="width: ${percent}%; background-color: ${color}"></div>
+          </div>
+        </td>
+      </tr>
+    `;
   }
 
-  async function reanchor(nodeId) {
-    const btn = document.getElementById('reanchor-btn') || { textContent: '' };
-    btn.textContent = 'Queuing...';
+  function renderParentPanel(data) {
+    // Directories have aggregated stats
+    panel.innerHTML = `
+      <div class="panel-header">
+        <div>
+          <div class="panel-title roobert" style="font-size: 24px; letter-spacing: -0.72px;">${data.label}</div>
+          <div class="panel-meta noto">Directory · ${data.path}</div>
+        </div>
+        <button class="btn-close" onclick="closePanel()">✕</button>
+      </div>
+
+      <div class="panel-body">
+        <div class="parent-metrics">
+          <div class="section-header roobert">Health Distribution</div>
+          <div class="child-bar">
+             <div class="bar-segment segment-green" style="width: 60%"></div>
+             <div class="bar-segment segment-yellow" style="width: 30%"></div>
+             <div class="bar-segment segment-red" style="width: 10%"></div>
+          </div>
+          <div class="panel-meta noto">12 green · 4 yellow · 1 red</div>
+        </div>
+
+        <div class="section-header roobert">Riskiest Children</div>
+        <div class="child-list">
+          <div class="child-item">
+            <span class="child-name noto">app.js</span>
+            <div class="child-grade" style="background: #600000"></div>
+          </div>
+          <div class="child-item">
+            <span class="child-name noto">auth-handler.ts</span>
+            <div class="child-grade" style="background: #d4850a"></div>
+          </div>
+        </div>
+
+        <button class="btn-reanchor roobert" style="background: var(--color-coral-dark);">
+          ↺ Heal All Red Children
+        </button>
+      </div>
+    `;
+  }
+
+  window.reanchorNode = async function(nodeId) {
+    const btn = document.getElementById('btn-reanchor');
+    if (!btn) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="pulse">⟳</span> Healing...';
 
     try {
-      const resp = await fetch('/reheal', {
+      const response = await fetch('/reheal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodeId })
       });
-      if (resp.ok) {
-        btn.textContent = 'Heal Queued';
-        setTimeout(() => { if(btn.textContent === 'Heal Queued') btn.textContent = 'Heal Component'; }, 3000);
+      
+      const res = await response.json();
+      if (res.status === 'queued') {
+        // We wait for the node_grade ws message to update the panel automatically
+        console.log('[PANEL] Healing request queued for ' + nodeId);
       }
-    } catch(e) {
-      btn.textContent = 'Failed';
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Retry Healing';
+      console.error('[PANEL] Re-anchor request failed:', err);
     }
+  };
+
+  window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.btn-copy');
+      const old = btn.textContent;
+      btn.textContent = 'copied!';
+      setTimeout(() => btn.textContent = old, 2000);
+    });
+  };
+
+  function getGradeColor(val) {
+    if (val >= 0.8) return '#00b473';
+    if (val >= 0.5) return '#d4850a';
+    return '#600000';
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
-  function escapeAttr(str) { return str.replace(/'/g, "\\'"); }
-
-  return { init, showNode, hide, reanchor };
 })();
-

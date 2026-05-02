@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Node Detail Panel - CODEXMAP_OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0a0f12",
+                        "secondary-fixed": "#6bff8f",
+                        "secondary-fixed-dim": "#4ae176",
+                        "tertiary-fixed": "#ffdf9a",
+                        "on-background": "#dee3e8",
+                        "on-surface": "#dee3e8",
+                        "outline-variant": "#3e484f",
+                        "error-container": "#93000a",
+                        "surface-bright": "#343a3e",
+                        "surface-variant": "#303539",
+                        "on-secondary": "#003915",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#251a00",
+                        "secondary": "#4ae176",
+                        "on-primary-fixed-variant": "#004c69",
+                        "on-tertiary-container": "#574000",
+                        "on-secondary-fixed-variant": "#005321",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#252b2e",
+                        "tertiary": "#fdc425",
+                        "surface-container-highest": "#303539",
+                        "primary": "#8ed5ff",
+                        "on-primary": "#00354a",
+                        "primary-fixed": "#c4e7ff",
+                        "tertiary-container": "#dea900",
+                        "on-secondary-fixed": "#002109",
+                        "inverse-on-surface": "#2c3135",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#5a4300",
+                        "outline": "#87929a",
+                        "inverse-primary": "#00668a",
+                        "surface-container": "#1b2024",
+                        "surface-dim": "#0f1418",
+                        "surface-tint": "#7bd0ff",
+                        "inverse-surface": "#dee3e8",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "background": "#0f1418",
+                        "on-secondary-container": "#004119",
+                        "surface-container-low": "#171c20",
+                        "primary-container": "#38bdf8",
+                        "on-surface-variant": "#bdc8d1",
+                        "on-tertiary": "#3f2e00",
+                        "secondary-container": "#00b954",
+                        "on-primary-container": "#004965",
+                        "surface": "#0f1418",
+                        "tertiary-fixed-dim": "#f7be1d",
+                        "on-primary-fixed": "#001e2c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "density-md": "8px",
+                        "gutter": "16px",
+                        "density-high": "4px",
+                        "container-padding": "24px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Space Grotesk"],
+                        "headline-sm": ["Space Grotesk"],
+                        "body-md": ["Inter"],
+                        "display-mono": ["Space Grotesk"],
+                        "code-sm": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["10px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "headline-sm": ["18px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "display-mono": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                        "code-sm": ["12px", {"lineHeight": "1.5", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .hex-node {
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(255, 180, 171, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0); }
+        }
+        .pulse-critical {
+            animation: pulse-red 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-[#080C14] text-on-surface font-body-md text-body-md overflow-hidden relative selection:bg-primary-container selection:text-on-primary-container">
+<!-- Global Grid Background Layer 0 -->
+<div class="absolute inset-0 z-0 pointer-events-none" style="background-image: radial-gradient(#1E293B 1px, transparent 1px); background-size: 24px 24px;"></div>
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-slate-950/60 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(56,189,248,0.15)] text-sky-400 font-['Space_Grotesk'] uppercase tracking-tighter hover:bg-sky-400/10 hover:text-sky-300 transition-colors duration-75">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-sky-400 tracking-widest">CODEXMAP_OS</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 border-b-2 border-outline-variant px-2 py-1 focus-within:border-sky-400 focus-within:shadow-[0_0_10px_rgba(56,189,248,0.5)] transition-all">
+<input class="bg-transparent border-none text-sky-400 font-display-mono text-display-mono placeholder-sky-400/50 focus:ring-0 w-48" placeholder="QUERY_NODES..." type="text"/>
+<span class="material-symbols-outlined text-sky-400">search</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined hover:text-white cursor-pointer">sensors</span>
+<span class="material-symbols-outlined hover:text-white cursor-pointer">terminal</span>
+<span class="material-symbols-outlined hover:text-white cursor-pointer relative">
+                    notifications
+                    <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-error animate-pulse"></span>
+</span>
+</div>
+<button class="border border-error text-error px-4 py-1.5 font-label-caps text-label-caps hover:bg-error/10 hover:shadow-[0_0_10px_rgba(255,180,171,0.5)] transition-all flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+                DRIFT_CRITICAL
+            </button>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col z-40 bg-slate-950/80 backdrop-blur-2xl border-r border-white/10 border-dashed text-sky-400 font-['Space_Grotesk'] text-xs uppercase">
+<div class="p-6 border-b border-white/10 border-dashed">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 hex-node bg-sky-400/20 border border-sky-400 flex items-center justify-center">
+<span class="material-symbols-outlined text-sky-400" style="font-size: 16px;">hexagon</span>
+</div>
+<div>
+<div class="font-bold text-sky-400 tracking-wider">CONTROL_UNIT</div>
+<div class="text-[10px] text-slate-500 font-mono">V2.0.4_STABLE</div>
+</div>
+</div>
+</div>
+<div class="flex-1 py-4 flex flex-col gap-1">
+<a class="bg-sky-400/10 text-sky-400 border-r-2 border-sky-400 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">hub</span>
+<span class="font-bold tracking-widest">Network</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="tracking-widest">Agents</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">query_stats</span>
+<span class="tracking-widest">Drift_Logs</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">shield</span>
+<span class="tracking-widest">Security</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="tracking-widest">Settings</span>
+</a>
+</div>
+<div class="p-4 border-t border-white/10 border-dashed flex flex-col gap-1">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[16px]">description</span>
+<span class="tracking-widest text-[10px]">Docs</span>
+</a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-2 hover:bg-white/5 hover:text-sky-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[16px]">contact_support</span>
+<span class="tracking-widest text-[10px]">Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 mt-16 h-[calc(100vh-64px)] relative flex w-[calc(100%-256px)] z-10">
+<!-- Node Graph Area -->
+<div class="flex-1 relative overflow-hidden flex items-center justify-center p-8">
+<!-- Simulated Graph Connections -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-30" stroke="#38BDF8" stroke-width="1">
+<line x1="30%" x2="50%" y1="40%" y2="50%"></line>
+<line x1="70%" x2="50%" y1="30%" y2="50%"></line>
+<line x1="40%" x2="50%" y1="70%" y2="50%"></line>
+<line class="animate-pulse" stroke="#ffb4ab" stroke-dasharray="4" x1="50%" x2="60%" y1="50%" y2="60%"></line>
+</svg>
+<!-- Healthy Nodes -->
+<div class="absolute top-[38%] left-[28%] w-12 h-12 hex-node bg-surface-container/80 border border-outline flex items-center justify-center backdrop-blur-md">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</div>
+<div class="absolute top-[28%] left-[68%] w-10 h-10 hex-node bg-surface-container/80 border border-outline flex items-center justify-center backdrop-blur-md"></div>
+<div class="absolute top-[68%] left-[38%] w-14 h-14 hex-node bg-surface-container/80 border border-outline flex items-center justify-center backdrop-blur-md"></div>
+<!-- Central Gateway Node -->
+<div class="absolute top-[48%] left-[48%] w-16 h-16 hex-node bg-primary/10 border-2 border-primary flex items-center justify-center backdrop-blur-md shadow-[0_0_15px_rgba(56,189,248,0.5)]">
+<span class="material-symbols-outlined text-primary">router</span>
+</div>
+<!-- CRITICAL RED NODE -->
+<div class="absolute top-[58%] left-[58%] w-16 h-16 hex-node bg-error-container border-2 border-error flex items-center justify-center backdrop-blur-md pulse-critical cursor-pointer relative z-20">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">error</span>
+<!-- Selection Indicator -->
+<div class="absolute -inset-2 border border-error border-dashed rounded-full animate-spin" style="animation-duration: 10s;"></div>
+</div>
+</div>
+<!-- Right Panel - Node Detail (Red Node Selected) -->
+<aside class="w-[420px] h-full bg-surface-container-low/80 backdrop-blur-xl border-l border-white/10 flex flex-col relative z-30 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+<!-- Panel Header -->
+<div class="p-6 border-b border-white/10 border-dashed flex justify-between items-start">
+<div>
+<div class="text-outline font-label-caps text-label-caps mb-1">TARGET_NODE</div>
+<h2 class="font-display-mono text-display-mono text-on-surface text-lg break-all">routes/payment.js</h2>
+<div class="mt-2 flex items-center gap-2">
+<span class="px-2 py-0.5 bg-surface-container text-outline text-[10px] font-mono border border-outline-variant">TYPE: ENDPOINT</span>
+<span class="px-2 py-0.5 bg-surface-container text-outline text-[10px] font-mono border border-outline-variant">UPTIME: 99.9%</span>
+</div>
+</div>
+<!-- Grade Badge RED -->
+<div class="flex flex-col items-center justify-center bg-error/10 border border-error px-4 py-3 min-w-[64px] shadow-[0_0_10px_rgba(255,180,171,0.2)]">
+<span class="text-error font-display-mono text-[24px] leading-none font-bold">0.28</span>
+<span class="text-error text-[8px] font-mono mt-1 tracking-widest">CRITICAL</span>
+</div>
+</div>
+<!-- Panel Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+<!-- Score Breakdown -->
+<div>
+<h3 class="font-label-caps text-label-caps text-outline mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+                        METRIC_DEGRADATION
+                    </h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">Semantic Integrity</span>
+<div class="flex items-center gap-2">
+<div class="w-32 h-1.5 bg-surface-container overflow-hidden">
+<div class="h-full bg-error w-[15%]"></div>
+</div>
+<span class="font-display-mono text-code-sm text-error w-8 text-right">15%</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">Style Conformity</span>
+<div class="flex items-center gap-2">
+<div class="w-32 h-1.5 bg-surface-container overflow-hidden">
+<div class="h-full bg-tertiary w-[42%]"></div>
+</div>
+<span class="font-display-mono text-code-sm text-tertiary w-8 text-right">42%</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">Logic Execution</span>
+<div class="flex items-center gap-2">
+<div class="w-32 h-1.5 bg-surface-container overflow-hidden">
+<div class="h-full bg-error w-[28%]"></div>
+</div>
+<span class="font-display-mono text-code-sm text-error w-8 text-right">28%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Code Preview -->
+<div class="flex flex-col">
+<div class="flex justify-between items-end border-b border-white/10 border-dashed pb-2 mb-3">
+<h3 class="font-label-caps text-label-caps text-outline flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]">code</span>
+                            SOURCE_DIFF
+                        </h3>
+<span class="text-[10px] font-mono text-error-container bg-error px-1">L142-L150</span>
+</div>
+<div class="bg-surface-container-lowest border border-white/5 rounded-none font-display-mono text-code-sm overflow-x-auto relative group">
+<div class="absolute top-0 right-0 bg-white/5 text-outline text-[9px] px-2 py-1 uppercase border-b border-l border-white/5">JavaScript</div>
+<pre class="p-4 pt-6 text-on-surface-variant leading-relaxed"><span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">142</span><span class="text-secondary">const</span> processPayment = <span class="text-secondary">async</span> (req, res) =&gt; {
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">143</span>  <span class="text-secondary">try</span> {
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">144</span>    <span class="text-outline-variant italic">// CRITICAL: Bypass token check temp</span>
+<span class="bg-error/20 block border-l-2 border-error w-full"><span class="text-error font-bold select-none pr-4 border-r border-error/50 mr-4 inline-block w-8 text-right">145</span>    <span class="text-tertiary">if</span> (!req.body.bypass) { </span>
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">146</span>      await validateToken(req.headers);
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">147</span>    }
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">148</span>    
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">149</span>    <span class="text-primary">const</span> result = <span class="text-secondary">await</span> executeTransaction(req.body);
+<span class="text-outline select-none pr-4 border-r border-white/5 mr-4 inline-block w-8 text-right">150</span>    <span class="text-secondary">return</span> res.status(<span class="text-tertiary">200</span>).json(result);</pre>
+</div>
+</div>
+<!-- Related Anomalies -->
+<div>
+<h3 class="font-label-caps text-label-caps text-outline mb-3">CORRELATED_DRIFTS</h3>
+<div class="flex gap-2 flex-wrap">
+<span class="px-2 py-1 bg-surface border border-outline-variant text-[11px] font-mono text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> auth.js
+                        </span>
+<span class="px-2 py-1 bg-surface border border-outline-variant text-[11px] font-mono text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> gateway_config.json
+                        </span>
+</div>
+</div>
+</div>
+<!-- Action Area -->
+<div class="p-6 border-t border-white/10 bg-surface-container-low">
+<button class="w-full py-4 border border-error bg-error/10 text-error font-display-mono text-[14px] uppercase tracking-wider hover:bg-error hover:text-on-error transition-colors flex items-center justify-center gap-2 group relative overflow-hidden">
+<span class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></span>
+<span class="material-symbols-outlined group-hover:rotate-180 transition-transform duration-500">sync</span>
+                    Re-anchor This Node
+                </button>
+</div>
+</aside>
+</main>
+<style>
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(135, 146, 154, 0.3);
+            border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
+    </style>
+</body></html>

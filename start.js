@@ -25,10 +25,11 @@ try {
 // Step 2: Start Web Server (Serve UI)
 console.log('[2/4] Starting UI Server on port 3333...');
 
-// Kill anything on 3333 first to avoid stale server bugs
+// Kill anything on 3333 and 4242 first to avoid stale server bugs
 try {
     if (process.platform === 'darwin' || process.platform === 'linux') {
         execSync('lsof -t -i:3333 | xargs kill -9 2>/dev/null || true');
+        execSync('lsof -t -i:4242 | xargs kill -9 2>/dev/null || true');
     }
 } catch (e) {}
 

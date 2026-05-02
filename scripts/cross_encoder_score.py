@@ -1,6 +1,7 @@
 import json
 import argparse
 import os
+import math
 from sentence_transformers import CrossEncoder
 
 def main():
@@ -37,7 +38,7 @@ def main():
         # but for this specific model it's often -10 to 10 range. 
         # We'll use a simple sigmoid or clipping for 0-1)
         # Note: ms-marco-MiniLM often needs normalization.
-        norm_score = 1.0 / (1.0 + os.math.exp(-score)) 
+        norm_score = 1.0 / (1.0 + math.exp(-score)) 
         results[node_ids[i]] = norm_score
 
     with open(output_path, 'w') as f:

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodexMap Agents Terminal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&amp;family=Inter:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#ffdad6",
+                        "outline-variant": "#3e484f",
+                        "on-secondary": "#003915",
+                        "on-secondary-container": "#004119",
+                        "surface-container-high": "#252b2e",
+                        "secondary": "#4ae176",
+                        "outline": "#87929a",
+                        "surface-container": "#1b2024",
+                        "on-background": "#dee3e8",
+                        "surface-container-lowest": "#0a0f12",
+                        "on-primary": "#00354a",
+                        "background": "#0f1418",
+                        "inverse-on-surface": "#2c3135",
+                        "surface": "#0f1418",
+                        "on-error": "#690005",
+                        "secondary-container": "#00b954",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed-dim": "#f7be1d",
+                        "surface-dim": "#0f1418",
+                        "on-tertiary-fixed": "#251a00",
+                        "on-surface-variant": "#bdc8d1",
+                        "surface-variant": "#303539",
+                        "on-tertiary-container": "#574000",
+                        "on-secondary-fixed-variant": "#005321",
+                        "on-primary-container": "#004965",
+                        "tertiary-fixed": "#ffdf9a",
+                        "inverse-primary": "#00668a",
+                        "primary-fixed": "#c4e7ff",
+                        "surface-container-low": "#171c20",
+                        "on-primary-fixed": "#001e2c",
+                        "on-tertiary": "#3f2e00",
+                        "tertiary": "#fdc425",
+                        "surface-bright": "#343a3e",
+                        "surface-tint": "#7bd0ff",
+                        "primary-fixed-dim": "#7bd0ff",
+                        "on-secondary-fixed": "#002109",
+                        "inverse-surface": "#dee3e8",
+                        "error-container": "#93000a",
+                        "secondary-fixed": "#6bff8f",
+                        "primary": "#8ed5ff",
+                        "on-surface": "#dee3e8",
+                        "on-primary-fixed-variant": "#004c69",
+                        "tertiary-container": "#dea900",
+                        "surface-container-highest": "#303539",
+                        "secondary-fixed-dim": "#4ae176",
+                        "on-tertiary-fixed-variant": "#5a4300",
+                        "primary-container": "#38bdf8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "24px",
+                        "density-high": "4px",
+                        "density-md": "8px",
+                        "unit": "4px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "display-mono": ["Space Grotesk"],
+                        "code-sm": ["Space Grotesk"],
+                        "label-caps": ["Space Grotesk"],
+                        "body-md": ["Inter"],
+                        "headline-sm": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "display-mono": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700" }],
+                        "code-sm": ["12px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-caps": ["10px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-sm": ["18px", { "lineHeight": "1.4", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .dot-grid {
+            background-image: radial-gradient(rgba(30, 41, 59, 0.5) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .scanline {
+            background: linear-gradient(to bottom, transparent 50%, rgba(56, 189, 248, 0.1) 51%);
+            background-size: 100% 4px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen dot-grid font-body-md text-body-md overflow-x-hidden">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-14 bg-slate-950/60 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(8,12,20,0.5)]">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] font-display-mono text-display-mono tracking-widest uppercase">CODEXMAP_SYS</span>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-6 font-display-mono text-display-mono tracking-widest uppercase">
+<a class="text-slate-500 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90" href="#">MAP_VIEW</a>
+<a class="text-slate-500 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90" href="#">CODE_VAULT</a>
+<a class="text-sky-400 border-b-2 border-sky-400 pb-1 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90" href="#">AGENT_STREAM</a>
+<a class="text-slate-500 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90" href="#">SECURITY_AUDIT</a>
+<a class="text-slate-500 hover:text-sky-300 hover:bg-white/5 transition-all scale-95 active:scale-90" href="#">SYSTEM_LOGS</a>
+</nav>
+</div>
+<div class="flex items-center gap-4 text-sky-400">
+<div class="relative w-64">
+<input class="w-full bg-surface-container-high border-b-2 border-outline-variant focus:border-primary focus:outline-none focus:ring-0 text-on-surface px-2 py-1 font-code-sm text-code-sm placeholder-outline" placeholder="SEARCH_TERMINAL..." type="text"/>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
+</div>
+<button class="hover:text-sky-300 hover:bg-white/5 transition-all p-1 rounded"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">terminal</span></button>
+<button class="hover:text-sky-300 hover:bg-white/5 transition-all p-1 rounded"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings_input_component</span></button>
+<button class="hover:text-sky-300 hover:bg-white/5 transition-all p-1 rounded"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">notifications_active</span></button>
+<img alt="Lead System Architect" class="w-8 h-8 rounded border border-white/10" data-alt="A close-up portrait of a highly focused lead system architect illuminated by the cool, cyan glow of multiple monitor screens in a dark, high-tech control room environment. Cyberpunk aesthetic, sharp focus, professional yet futuristic mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGJ9hlbrMsqSCUwLrWklEXWAa8ryPeQzCjcDFEfkZZ5YbJiHNZmZNnMD1NGKXDboxFgkBXvKIQWsn6Ju76KiCDx5mBenld6bO5VPa2VKT1USBEOkcfdtyJRgeWbJn7LwVhgFArwDCqIStYTxXKpINpFlHhRaKRvXCfz73It7avuPAP-LtIXzuH3hZlKTv87pJHtXzsdXTnkiZw0ik-gBznFZMxupvhMrN7j2p3jlvzzzVS86i7i0dkud0dSTX_skZaeoYcBwLHBqGx"/>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="hidden md:flex fixed left-0 top-14 bottom-0 flex-col z-40 bg-slate-950/60 backdrop-blur-xl border-r border-white/10 w-64 shadow-2xl">
+<div class="p-6 border-b border-white/10 flex items-center gap-4">
+<img alt="Authorized User" class="w-10 h-10 rounded border border-white/10" data-alt="A stylized, glowing avatar representing an authorized user within a secure, high-tech network. The avatar is surrounded by faint digital noise and a subtle cyan aura, set against a dark void." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTJ7YqjSboVJDnsTtBWsW_Bw-go43Gu5rcfdR0IX5FfJCK7v0ddkbO6IlFgkYnVSNu6v7Qpy4OvDtx-Aqs4w26Ei0fQWtIjwZkfsWr0qNCRkwpJSnWGrZZsgr4smvuk735NKoujOUXR1ZlQh4B_a_Fu7OyvZW8EVsDe7SSAjg8XHjs8FNpN0-wvLom4FwSSY22l3ucHMLfacWN62WYaXyYAj9eScPvcn6FCfNenLFzB8XjIfn6Y5q26BywfmL-ItkI2C_HJ1Atg9Xo"/>
+<div>
+<div class="font-display-mono text-display-mono text-sky-400">NODE_01</div>
+<div class="font-label-caps text-label-caps text-secondary mt-1">STATUS: ENCRYPTED</div>
+</div>
+</div>
+<nav class="flex-1 py-4 font-['Space_Grotesk'] text-xs font-bold uppercase tracking-tighter">
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined">hub</span> Map_View
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined">code_blocks</span> Code_Vault
+            </a>
+<a class="bg-sky-400/10 text-sky-400 border-l-4 border-sky-400 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined">smart_toy</span> Agent_Stream
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined">verified_user</span> Security_Audit
+            </a>
+<a class="text-slate-500 px-4 py-3 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors cursor-pointer active:bg-sky-900/20" href="#">
+<span class="material-symbols-outlined">analytics</span> System_Logs
+            </a>
+</nav>
+<div class="p-4 border-t border-white/10">
+<button class="w-full border border-sky-400 text-sky-400 font-display-mono text-display-mono py-2 rounded hover:bg-sky-400 hover:text-on-primary transition-colors uppercase tracking-widest text-center scanline">INITIALIZE_SCAN</button>
+</div>
+<div class="py-4 border-t border-white/10 font-['Space_Grotesk'] text-xs font-bold uppercase tracking-tighter">
+<a class="text-slate-500 px-4 py-2 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors" href="#">
+<span class="material-symbols-outlined">menu_book</span> Documentation
+            </a>
+<a class="text-slate-500 px-4 py-2 flex items-center gap-3 hover:bg-white/5 hover:text-sky-200 transition-colors" href="#">
+<span class="material-symbols-outlined">support_agent</span> Support
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="pt-14 md:pl-64 min-h-screen p-container-padding flex flex-col gap-gutter">
+<!-- Header Section -->
+<div class="flex justify-between items-end border-b border-outline-variant pb-4">
+<div>
+<h1 class="font-headline-sm text-headline-sm text-primary-container tracking-widest uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-xl">monitor_heart</span>
+                    Agent Telemetry Stream
+                </h1>
+<p class="font-code-sm text-code-sm text-on-surface-variant mt-2 opacity-80">Monitoring live AI unit subroutines and resource allocation.</p>
+</div>
+<div class="flex gap-4 items-center">
+<div class="flex items-center gap-2 font-code-sm text-code-sm">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-secondary">SYSTEM NOMINAL</span>
+</div>
+<div class="font-display-mono text-display-mono text-outline border border-outline-variant px-3 py-1 rounded bg-surface-container">UPTIME: 99.9%</div>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-gutter flex-1">
+<!-- Agent Cards (Left Column) -->
+<div class="col-span-12 xl:col-span-4 flex flex-col gap-gutter">
+<!-- Agent 1: Cartographer -->
+<div class="bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-lg p-4 flex flex-col gap-3 relative overflow-hidden group hover:border-primary-container/50 transition-colors">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">map</span>
+<h2 class="font-display-mono text-display-mono text-on-background tracking-widest">CARTOGRAPHER</h2>
+</div>
+<span class="font-label-caps text-label-caps bg-surface-container-high px-2 py-1 rounded border border-outline-variant text-outline">ID: C-882</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-2">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">CPU LOAD</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-primary-container w-[78%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-primary-container">78%</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">MEM USAGE</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-secondary w-[45%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-secondary">4.2GB</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-dashed border-outline-variant p-3 rounded mt-2 font-code-sm text-code-sm text-on-surface-variant relative">
+<div class="absolute top-0 right-0 bg-outline-variant text-on-surface px-1 text-[8px] uppercase tracking-widest rounded-bl">CURRENT_TASK</div>
+<span class="text-tertiary-fixed-dim">&gt;</span> Mapping /api/v2/auth endpoints...
+                    </div>
+</div>
+<!-- Agent 2: Broadcaster -->
+<div class="bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-lg p-4 flex flex-col gap-3 relative overflow-hidden group hover:border-tertiary/50 transition-colors">
+<div class="absolute top-0 left-0 w-1 h-full bg-tertiary"></div>
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">cell_tower</span>
+<h2 class="font-display-mono text-display-mono text-on-background tracking-widest">BROADCASTER</h2>
+</div>
+<span class="font-label-caps text-label-caps bg-surface-container-high px-2 py-1 rounded border border-outline-variant text-outline">ID: B-109</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-2">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">CPU LOAD</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-tertiary w-[32%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-tertiary">32%</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">MEM USAGE</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-secondary w-[15%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-secondary">1.1GB</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-dashed border-outline-variant p-3 rounded mt-2 font-code-sm text-code-sm text-on-surface-variant relative">
+<div class="absolute top-0 right-0 bg-outline-variant text-on-surface px-1 text-[8px] uppercase tracking-widest rounded-bl">CURRENT_TASK</div>
+<span class="text-tertiary-fixed-dim">&gt;</span> Syncing state to external webhook...
+                    </div>
+</div>
+<!-- Agent 3: Sentinel -->
+<div class="bg-slate-950/60 backdrop-blur-md border border-error/50 shadow-[0_0_15px_rgba(255,180,171,0.1)] rounded-lg p-4 flex flex-col gap-3 relative overflow-hidden group hover:border-error transition-colors">
+<div class="absolute top-0 left-0 w-1 h-full bg-error"></div>
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-error animate-pulse">security</span>
+<h2 class="font-display-mono text-display-mono text-error tracking-widest">SENTINEL</h2>
+</div>
+<span class="font-label-caps text-label-caps bg-error-container px-2 py-1 rounded border border-error text-on-error-container">ID: S-99X</span>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-2">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">CPU LOAD</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-error w-[94%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-error">94%</div>
+</div>
+<div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">MEM USAGE</div>
+<div class="h-2 bg-surface-container-high rounded overflow-hidden">
+<div class="h-full bg-error w-[88%] relative"><div class="absolute inset-0 scanline"></div></div>
+</div>
+<div class="font-code-sm text-code-sm text-right mt-1 text-error">8.4GB</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-dashed border-error/50 p-3 rounded mt-2 font-code-sm text-code-sm text-error relative">
+<div class="absolute top-0 right-0 bg-error/20 text-error px-1 text-[8px] uppercase tracking-widest rounded-bl">ALERT_STATE</div>
+<span class="text-error">&gt;</span> Analyzing anomalous payload packet...
+                    </div>
+</div>
+</div>
+<!-- Central Visualization & Logs (Right Column) -->
+<div class="col-span-12 xl:col-span-8 flex flex-col gap-gutter">
+<!-- Agent Collaboration Matrix -->
+<div class="bg-slate-950/80 backdrop-blur-xl border border-white/10 rounded-lg flex-1 relative overflow-hidden min-h-[400px]">
+<div class="absolute top-4 left-4 font-display-mono text-display-mono text-on-surface-variant tracking-widest z-10 flex items-center gap-2">
+<span class="material-symbols-outlined">device_hub</span>
+                        COLLABORATION_MATRIX_V2
+                    </div>
+<!-- Abstract Cytoscape-ish visual representation (CSS only) -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<!-- Center Node -->
+<div class="absolute w-16 h-16 bg-surface-container-high border-2 border-primary-container rounded-lg rotate-45 flex items-center justify-center shadow-[0_0_30px_rgba(56,189,248,0.2)] z-20">
+<div class="w-8 h-8 bg-background border border-primary/50 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-container -rotate-45 text-sm">memory</span>
+</div>
+</div>
+<!-- Connecting Lines -->
+<div class="absolute w-full h-full">
+<!-- Cartographer Line -->
+<div class="absolute top-1/4 left-1/4 w-[25%] border-t border-primary-container/30 transform origin-top-left rotate-45">
+<div class="w-2 h-2 rounded-full bg-primary-container absolute -top-1 right-0 shadow-[0_0_10px_#38bdf8]"></div>
+</div>
+<!-- Broadcaster Line -->
+<div class="absolute bottom-1/4 left-1/4 w-[25%] border-t border-tertiary/30 transform origin-bottom-left -rotate-45">
+<div class="w-2 h-2 rounded-full bg-tertiary absolute -top-1 right-0 shadow-[0_0_10px_#fdc425]"></div>
+</div>
+<!-- Sentinel Line -->
+<div class="absolute top-1/2 right-1/4 w-[25%] border-t border-error/50 transform origin-right">
+<div class="w-2 h-2 rounded-full bg-error absolute -top-1 left-0 shadow-[0_0_15px_#ffb4ab] animate-ping"></div>
+</div>
+</div>
+<!-- Surrounding Nodes -->
+<div class="absolute top-[20%] left-[20%] w-10 h-10 bg-surface border border-primary-container/50 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-container text-xs">map</span>
+</div>
+<div class="absolute bottom-[20%] left-[20%] w-10 h-10 bg-surface border border-tertiary/50 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-xs">cell_tower</span>
+</div>
+<div class="absolute top-[50%] right-[20%] w-10 h-10 bg-error/10 border border-error rounded flex items-center justify-center shadow-[0_0_15px_rgba(255,180,171,0.3)] transform -translate-y-1/2">
+<span class="material-symbols-outlined text-error text-xs">security</span>
+</div>
+</div>
+</div>
+<!-- Internal Logic Stream -->
+<div class="bg-surface-container-lowest border border-white/10 rounded-lg h-64 p-4 flex flex-col font-code-sm text-code-sm">
+<div class="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant/50">
+<h3 class="font-label-caps text-label-caps text-outline uppercase tracking-widest">Global Logic Stream</h3>
+<span class="text-[10px] text-outline flex items-center gap-1"><span class="w-1.5 h-1.5 bg-secondary rounded-full"></span> LIVE</span>
+</div>
+<div class="overflow-y-auto flex-1 flex flex-col gap-1 text-on-surface-variant opacity-80">
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline">10:42:01</span>
+<span><span class="text-primary-container">[CARTOGRAPHER]</span> Discovered path /users/v1/profile (GET)</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline">10:42:05</span>
+<span><span class="text-primary-container">[CARTOGRAPHER]</span> Parsing schema definition...</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline">10:42:12</span>
+<span><span class="text-tertiary">[BROADCASTER]</span> Broadcasting schema update to main cluster.</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded bg-error/10 text-error border-l-2 border-error">
+<span class="text-error/70">10:42:18</span>
+<span><span class="font-bold">[SENTINEL]</span> WARN: Unauthenticated access attempt on /admin/debug.</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline">10:42:19</span>
+<span><span class="text-error">[SENTINEL]</span> Initiating automated packet trace...</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline">10:42:25</span>
+<span><span class="text-primary-container">[CARTOGRAPHER]</span> Mapping /api/v2/auth endpoints...</span>
+</div>
+<div class="grid grid-cols-[80px_1fr] hover:bg-white/5 px-1 py-0.5 rounded">
+<span class="text-outline animate-pulse">_</span>
+<span></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

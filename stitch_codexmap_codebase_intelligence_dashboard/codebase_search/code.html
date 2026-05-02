@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodexMap - Codebase Search</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#3e484f",
+                      "on-secondary-fixed": "#002109",
+                      "tertiary-fixed": "#ffdf9a",
+                      "on-primary-fixed-variant": "#004c69",
+                      "on-surface-variant": "#bdc8d1",
+                      "on-primary-fixed": "#001e2c",
+                      "surface-container-low": "#171c20",
+                      "surface-bright": "#343a3e",
+                      "inverse-surface": "#dee3e8",
+                      "on-error": "#690005",
+                      "outline": "#87929a",
+                      "secondary-fixed": "#6bff8f",
+                      "on-tertiary-container": "#574000",
+                      "on-tertiary-fixed-variant": "#5a4300",
+                      "surface-container-high": "#252b2e",
+                      "secondary": "#4ae176",
+                      "primary-container": "#38bdf8",
+                      "surface-tint": "#7bd0ff",
+                      "on-surface": "#dee3e8",
+                      "tertiary-container": "#dea900",
+                      "surface-variant": "#303539",
+                      "surface-container-highest": "#303539",
+                      "tertiary": "#fdc425",
+                      "secondary-container": "#00b954",
+                      "background": "#0f1418",
+                      "on-secondary-fixed-variant": "#005321",
+                      "tertiary-fixed-dim": "#f7be1d",
+                      "surface": "#0f1418",
+                      "on-secondary": "#003915",
+                      "surface-container": "#1b2024",
+                      "surface-dim": "#0f1418",
+                      "inverse-primary": "#00668a",
+                      "on-secondary-container": "#004119",
+                      "error-container": "#93000a",
+                      "on-primary": "#00354a",
+                      "on-tertiary": "#3f2e00",
+                      "on-error-container": "#ffdad6",
+                      "primary": "#8ed5ff",
+                      "surface-container-lowest": "#0a0f12",
+                      "on-background": "#dee3e8",
+                      "inverse-on-surface": "#2c3135",
+                      "primary-fixed-dim": "#7bd0ff",
+                      "primary-fixed": "#c4e7ff",
+                      "on-primary-container": "#004965",
+                      "error": "#ffb4ab",
+                      "on-tertiary-fixed": "#251a00",
+                      "secondary-fixed-dim": "#4ae176"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "container-padding": "24px",
+                      "density-high": "4px",
+                      "gutter": "16px",
+                      "density-md": "8px"
+              },
+              "fontFamily": {
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "display-mono": [
+                              "Space Grotesk"
+                      ],
+                      "headline-sm": [
+                              "Space Grotesk"
+                      ],
+                      "label-caps": [
+                              "Space Grotesk"
+                      ],
+                      "code-sm": [
+                              "Space Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-mono": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "0.1em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-caps": [
+                              "10px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "code-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Visual dot grid simulation using standard gradient syntax */
+        .bg-cyber-dots {
+            background-image: radial-gradient(circle, #1E293B 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+      </style>
+</head>
+<body class="bg-background text-on-background min-h-screen bg-cyber-dots antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar (Shared Component) -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-slate-950/60 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
+<div class="font-['Space_Grotesk'] uppercase tracking-tighter text-xl font-black text-sky-400 tracking-widest">
+            CODEXMAP_OS
+        </div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">sensors</span>
+</button>
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="text-slate-400 font-medium hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+<button class="font-['Space_Grotesk'] uppercase tracking-tighter text-sky-400 border border-sky-400/50 px-4 py-1.5 rounded-sm hover:bg-sky-400/10 hover:text-sky-300 transition-colors flicker-on-hover duration-75 text-sm font-bold shadow-[0_0_10px_rgba(56,189,248,0.2)]">
+                DRIFT_CRITICAL
+            </button>
+</div>
+</nav>
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col z-40 bg-slate-950/80 backdrop-blur-2xl border-r border-white/10 dash-border-r flat">
+<div class="p-6 border-b border-white/10 flex items-center gap-4">
+<img alt="Hexagon Logo" class="w-10 h-10 object-cover border border-sky-400/30" data-alt="A striking, precise geometric digital artwork depicting a stylized hexagon rendered in bright cyan lighting against a pure pitch-black background. The logo incorporates intricate circuit-board traces and sharp, angular lines emerging from its vertices, strongly emphasizing a high-tech, cyberpunk aesthetic. The visual mood is authoritative, cold, and purely technical, suited for a highly secure operating system dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_Wl5LbdkS0y4CcKw6Xnd2X31Eu95M1bTEvxHixaMtGbYBeqP0y5wkf__bGfp0JwIlxdRJBxjFASHf6Sx07ZR2XKgoxra9-73sktl6iTkoR9q_E1T0RYfoRFm4GL8nPCRDF0dezJ6GqFFUqRAPpW5bcjH47Z6j4DbuFX3RbDdmW-_xbHyYYA11cOw4zQLIoYfSUVL7n47bed0BxLDg2Lk_skM5S7_65zoPRveFCZZgqNVIkH79dt_xktPX5lezYI5NM79a3_WMYxyx"/>
+<div class="flex flex-col">
+<span class="text-sky-400 font-bold font-['Space_Grotesk'] text-xs monospaced tracking-wider">CONTROL_UNIT</span>
+<span class="text-slate-500 font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">V2.0.4_STABLE</span>
+</div>
+</div>
+<div class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">monitor_heart</span> Health
+            </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">smart_toy</span> Agents
+            </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">lan</span> Drift_Logs
+            </a>
+<a class="bg-sky-400/10 text-sky-400 border-r-2 border-sky-400 flex items-center gap-3 px-4 py-3 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">search_check</span> Codebase
+            </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">shield</span> Security
+            </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">settings</span> Settings
+            </a>
+</div>
+<div class="border-t border-white/10 py-4 flex flex-col gap-1">
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">description</span> Docs
+            </a>
+<a class="text-slate-500 flex items-center gap-3 px-4 py-3 hover:bg-white/5 hover:text-sky-200 transition-all scale-95-active duration-150 font-['Space_Grotesk'] text-xs monospaced" href="#">
+<span class="material-symbols-outlined text-lg">contact_support</span> Support
+            </a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 mt-16 p-container-padding min-h-screen relative z-10 flex flex-col gap-8">
+<!-- Search & Filter Header -->
+<section class="flex flex-col gap-6 max-w-4xl w-full mx-auto mt-4">
+<!-- Glowing Input Wrapper -->
+<div class="relative w-full group">
+<div class="absolute inset-0 bg-primary/20 blur-xl rounded-lg opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="relative bg-surface-container-high/60 backdrop-blur-xl border-b-2 border-outline flex items-center px-6 py-4 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+<span class="material-symbols-outlined text-outline group-focus-within:text-primary mr-4 text-3xl">search</span>
+<input class="w-full bg-transparent border-none text-on-surface placeholder-outline-variant focus:ring-0 font-headline-sm text-headline-sm" placeholder="Query nexus nodes, protocols, or raw syntactics..." type="text"/>
+<div class="flex items-center gap-2 ml-4">
+<span class="px-2 py-1 bg-surface-container border border-outline-variant font-label-caps text-label-caps text-on-surface-variant rounded-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">keyboard_command_key</span> K
+                        </span>
+</div>
+</div>
+</div>
+<!-- Complex Filter Chips -->
+<div class="flex flex-wrap items-center gap-3">
+<div class="text-on-surface-variant font-label-caps text-label-caps mr-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">filter_list</span> FILTERS:
+                </div>
+<button class="bg-surface-container border border-outline-variant rounded-full px-4 py-1.5 flex items-center gap-2 hover:border-primary/50 hover:bg-surface-container-high group">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-primary">account_tree</span>
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed">Node Type</span>
+<span class="material-symbols-outlined text-outline-variant text-[14px]">arrow_drop_down</span>
+</button>
+<button class="bg-surface-container border border-outline-variant rounded-full px-4 py-1.5 flex items-center gap-2 hover:border-primary/50 hover:bg-surface-container-high group">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-primary">label</span>
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed">Metadata Tags</span>
+<div class="w-2 h-2 rounded-full bg-primary ml-1"></div>
+</button>
+<button class="bg-surface-container border border-outline-variant rounded-full px-4 py-1.5 flex items-center gap-2 hover:border-primary/50 hover:bg-surface-container-high group">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-primary">history</span>
+<span class="font-label-caps text-label-caps text-on-surface group-hover:text-primary-fixed">Drift History</span>
+<span class="material-symbols-outlined text-outline-variant text-[14px]">arrow_drop_down</span>
+</button>
+<button class="ml-auto text-on-surface-variant font-label-caps text-label-caps hover:text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">clear_all</span> CLEAR
+                </button>
+</div>
+</section>
+<!-- Results Grid -->
+<section class="grid grid-cols-12 gap-gutter mt-4">
+<!-- Result Card 1 -->
+<div class="col-span-12 xl:col-span-6 bg-surface-container-low/80 backdrop-blur-md border border-outline-variant/50 rounded p-6 flex flex-col gap-density-md relative group hover:border-primary/40">
+<!-- Top Edge Highlight -->
+<div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+<!-- Abstract Mini-Graph Visual (Top Right) -->
+<div class="absolute top-6 right-6 w-12 h-12 opacity-40 flex items-center justify-center pointer-events-none">
+<div class="relative w-full h-full">
+<div class="absolute top-0 left-1/2 w-[1px] h-full bg-outline-variant"></div>
+<div class="absolute top-1/2 left-0 w-full h-[1px] bg-outline-variant"></div>
+<div class="absolute top-1/4 left-1/4 w-2 h-2 rounded-full bg-secondary border border-background"></div>
+<div class="absolute bottom-1/4 right-1/4 w-2 h-2 rounded-full bg-primary border border-background"></div>
+<div class="absolute top-3/4 left-1/2 w-2 h-2 rounded-full bg-tertiary border border-background"></div>
+</div>
+</div>
+<!-- Header -->
+<div class="flex items-start justify-between pr-16">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-3">
+<h3 class="font-display-mono text-display-mono text-primary-fixed">auth_gateway_node.ts</h3>
+<!-- Status Pill -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 bg-secondary-container/10 border border-secondary/30 rounded-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+<span class="font-label-caps text-label-caps text-secondary-fixed">LIVE</span>
+</div>
+</div>
+<div class="font-code-sm text-code-sm text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">folder</span>
+                            src/core/security/auth/
+                        </div>
+</div>
+</div>
+<!-- Metrics Row -->
+<div class="flex items-center gap-6 mt-2 border-y border-dashed border-outline-variant/30 py-3">
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">DRIFT DELTA</span>
+<span class="font-display-mono text-display-mono text-secondary-fixed">+0.04%</span>
+</div>
+<div class="w-[1px] h-6 bg-outline-variant/50"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">CONNECTIONS</span>
+<span class="font-display-mono text-display-mono text-on-surface">142</span>
+</div>
+<div class="w-[1px] h-6 bg-outline-variant/50"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">LAST SYNC</span>
+<span class="font-display-mono text-display-mono text-outline">12s ago</span>
+</div>
+</div>
+<!-- Code Snippet Preview -->
+<div class="mt-2 border border-dashed border-outline-variant bg-surface-container-lowest relative rounded-sm p-4 overflow-hidden">
+<div class="absolute top-0 right-0 bg-outline-variant/40 px-2 py-1 border-b border-l border-outline-variant">
+<span class="font-label-caps text-label-caps text-on-surface">TYPESCRIPT</span>
+</div>
+<pre class="font-code-sm text-code-sm text-on-surface whitespace-pre-wrap"><span class="text-tertiary">export async function</span> <span class="text-primary-fixed">validateTokenSequence</span>(
+  sequence: <span class="text-secondary-fixed">Buffer</span>,
+  context: <span class="text-secondary-fixed">AuthContext</span>
+): <span class="text-tertiary-fixed">Promise</span>&lt;<span class="text-secondary-fixed">ValidationResult</span>&gt; {
+  <span class="text-outline">/* Initiating deep packet inspection */</span>
+  <span class="text-tertiary">const</span> stream = <span class="text-primary">await</span> connectionPool.acquire();
+  <span class="text-tertiary">return</span> stream.verify(sequence);
+}</pre>
+</div>
+</div>
+<!-- Result Card 2 -->
+<div class="col-span-12 xl:col-span-6 bg-surface-container-low/80 backdrop-blur-md border border-outline-variant/50 rounded p-6 flex flex-col gap-density-md relative group hover:border-primary/40">
+<div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+<!-- Abstract Mini-Graph Visual -->
+<div class="absolute top-6 right-6 w-12 h-12 opacity-40 flex items-center justify-center pointer-events-none">
+<div class="relative w-full h-full">
+<svg class="stroke-outline-variant fill-none" height="48" viewbox="0 0 48 48" width="48">
+<polygon points="24,4 44,24 24,44 4,24" stroke-dasharray="2 2" stroke-width="1"></polygon>
+<circle class="fill-error border-none" cx="24" cy="4" r="3"></circle>
+<circle class="fill-primary border-none" cx="44" cy="24" r="2"></circle>
+<circle class="fill-primary border-none" cx="4" cy="24" r="2"></circle>
+</svg>
+</div>
+</div>
+<!-- Header -->
+<div class="flex items-start justify-between pr-16">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-3">
+<h3 class="font-display-mono text-display-mono text-primary-fixed">drift_analyzer.rs</h3>
+<!-- Status Pill (Warning) -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 bg-error-container/20 border border-error/40 rounded-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-error"></div>
+<span class="font-label-caps text-label-caps text-error">ANOMALY</span>
+</div>
+</div>
+<div class="font-code-sm text-code-sm text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">folder</span>
+                            crates/analyzer/src/
+                        </div>
+</div>
+</div>
+<!-- Metrics Row -->
+<div class="flex items-center gap-6 mt-2 border-y border-dashed border-outline-variant/30 py-3">
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">DRIFT DELTA</span>
+<span class="font-display-mono text-display-mono text-error">+12.8%</span>
+</div>
+<div class="w-[1px] h-6 bg-outline-variant/50"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">CONNECTIONS</span>
+<span class="font-display-mono text-display-mono text-on-surface">8</span>
+</div>
+<div class="w-[1px] h-6 bg-outline-variant/50"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant">LAST SYNC</span>
+<span class="font-display-mono text-display-mono text-outline">2m ago</span>
+</div>
+</div>
+<!-- Code Snippet Preview -->
+<div class="mt-2 border border-dashed border-outline-variant bg-surface-container-lowest relative rounded-sm p-4 overflow-hidden">
+<div class="absolute top-0 right-0 bg-outline-variant/40 px-2 py-1 border-b border-l border-outline-variant">
+<span class="font-label-caps text-label-caps text-on-surface">RUST</span>
+</div>
+<pre class="font-code-sm text-code-sm text-on-surface whitespace-pre-wrap"><span class="text-tertiary">pub fn</span> <span class="text-primary-fixed">detect_quantum_drift</span>(
+    state_vector: <span class="text-secondary-fixed">&amp;[f64]</span>,
+    threshold: <span class="text-secondary-fixed">f64</span>
+) -&gt; <span class="text-tertiary-fixed">Result</span>&lt;<span class="text-secondary-fixed">DriftEvent</span>, <span class="text-error">Error</span>&gt; {
+    <span class="text-tertiary">let</span> variance = calculate_variance(state_vector);
+    <span class="text-tertiary">if</span> variance &gt; threshold {
+        <span class="text-tertiary">return</span> <span class="text-primary">Ok</span>(<span class="text-secondary-fixed">DriftEvent::Critical</span>);
+    }
+}</pre>
+</div>
+</div>
+</section>
+</main>
+</body></html>

@@ -1,0 +1,39 @@
+.grade-chip.grade-green,
+.grade-chip.green {
+  background: #c3faf5;
+  border-color: #187574;
+  color: #187574;
+}
+
+.grade-chip.grade-yellow,
+.grade-chip.yellow {
+  background: #ffe6cd;
+  border-color: #d4850a;
+  color: #746019;
+}
+
+.grade-chip.grade-red,
+.grade-chip.red {
+  background: #ffc6c6;
+  border-color: #600000;
+  color: #600000;
+}
+
+.grade-chip.grade-pending,
+.grade-chip.pending {
+  background: #f0f0f0;
+  border-color: #c7cad5;
+  color: #a5a8b5;
+}
+
+.grade-green-bg {
+  background: #c3faf5;
+}
+
+.grade-yellow-bg {
+  background: #ffe6cd;
+}
+
+.grade-red-bg {
+  background: #ffc6c6;
+}

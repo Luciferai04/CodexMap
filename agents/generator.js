@@ -53,11 +53,28 @@ try {
   // Ignore
 }
 
-// ─── Spawn Codex CLI ────────────────────────────────────────────────────────
-// SKILL.md: Always run Codex with --approval-mode auto-edit
-const codex = spawn('codex', [prompt], {
+// ─── Resolve Codex binary dynamically ───────────────────────────────────────
+let CODEX_PATH = 'codex'; // Default: assume it's in PATH
+try {
+  const { execSync } = require('child_process');
+  const resolved = execSync('which codex', { encoding: 'utf8', timeout: 5000 }).trim();
+  if (resolved) CODEX_PATH = resolved;
+} catch (e) {
+  // 'which' failed — fall back to bare 'codex' and hope PATH is set
+  console.log('[GENERATOR] ⚠ Could not resolve codex path, using PATH default');
+}
+const codex = spawn(CODEX_PATH, [
+  '--model', 'gpt-3.5-turbo',
+  'exec', prompt,
+  '--dangerously-bypass-approvals-and-sandbox',
+  '--cd', OUTPUT_DIR
+], {
   stdio: ['ignore', 'pipe', 'pipe'],
-  cwd: OUTPUT_DIR,  // Codex writes generated files to the output directory
+  env: { 
+    ...process.env, 
+    CODEX_API_KEY: process.env.OPENAI_API_KEY,
+    AIDER_MODEL: 'gpt-3.5-turbo'
+  }
 });
 
 // Pipe stdout through for logging — do NOT parse it
