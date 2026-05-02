@@ -302,7 +302,7 @@
 })();
 
 window.triggerFullReanchor = function() {
-  fetch('http://localhost:4242/reheal', {
+  fetch('http://localhost:3000/reheal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ batch: true })

@@ -1,9 +1,9 @@
 {
-  "redNodeRatio": 0.5,
+  "redNodeRatio": 0.143,
   "depComplexity": 0,
-  "maxCyclomatic": 6,
-  "collapseScore": 0,
+  "maxCyclomatic": 2,
+  "collapseScore": 20,
   "warnings": [],
   "destabilizing": false,
-  "lastUpdated": "2026-05-02T07:15:31.447Z"
+  "lastUpdated": "2026-05-02T08:34:03.543Z"
 }

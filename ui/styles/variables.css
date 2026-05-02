@@ -59,7 +59,7 @@
   --radius-pill: 50px;
 
   /* Typography Scale */
-  --font-display: 'Roobert', 'Roobert PRO Medium', 'Inter', sans-serif;
+  --font-display: 'Roobert PRO Medium', 'Roobert', 'Inter', sans-serif;
   --font-body: 'Noto Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 

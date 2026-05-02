@@ -1,16 +1,19 @@
 #canvas-container {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  /* Dot grid background — Miro style */
-  background-color: #fafbfc;
-  background-image: radial-gradient(circle, rgba(0,0,0,0.12) 1px, transparent 1px);
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  background-image: radial-gradient(
+    circle, 
+    rgba(0, 0, 0, 0.08) 1px, 
+    transparent 1px
+  );
   background-size: 24px 24px;
   background-position: 0 0;
+  position: relative;
+  overflow: hidden;
 }
 
 /* Force Cytoscape canvas to be transparent so dot grid shows through */
-#canvas-container > div,
 #canvas-container canvas {
   background: transparent !important;
 }

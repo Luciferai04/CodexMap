@@ -12,6 +12,7 @@ const WebSocket = require('ws');
 const chokidar = require('chokidar');
 const fs = require('fs');
 const path = require('path');
+const { config } = require('../config');
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 const SHARED_DIR = path.join(__dirname, '..', 'shared');
@@ -39,9 +40,9 @@ let generationDoneSent = false;
 let batchTimer = null;
 let pendingDiffs = { nodes: [], edges: [] };
 
-// ─── WebSocket Server on port 4242 ──────────────────────────────────────────
-const wss = new WebSocket.Server({ port: 4242, host: '127.0.0.1' });
-console.log('[BROADCASTER] WebSocket server started on ws://localhost:4242');
+// ─── WebSocket Server on configured port ──────────────────────────────────
+const wss = new WebSocket.Server({ port: config.ports.websocket, host: '127.0.0.1' });
+console.log(`[BROADCASTER] WebSocket server started on ws://localhost:${config.ports.websocket}`);
 
 // FIX #2: Health endpoint for diagnostics
 const http = require('http');
@@ -54,7 +55,7 @@ const healthServer = http.createServer((req, res) => {
     res.end();
   }
 });
-healthServer.listen(4243, () => {
+healthServer.listen(0, () => {
   console.log('[BROADCASTER] Health endpoint → http://localhost:4243/health');
 });
 
@@ -278,6 +279,8 @@ chokidar.watch(MAP_STATE_PATH, { persistent: true }).on('change', () => {
 });
 
 // ─── Watch grade-queue.json for node_grade messages ─────────────────────────
+/*
+// ─── Watch grade-queue.json for node_grade messages ─────────────────────────
 const gradeQueueWatcher = chokidar.watch(GRADE_QUEUE_PATH, {
   persistent: true,
   ignoreInitial: true,
@@ -309,10 +312,13 @@ gradeQueueWatcher.on('change', () => {
     console.error(`[BROADCASTER] ✖ Grade queue processing failed: ${err.message}`);
   }
 });
+*/
 
+/*
 gradeQueueWatcher.on('error', () => {
   // grade-queue.json may not exist yet — that's fine
 });
+*/
 
 // ─── Watch session-drift-log.json for drift_score messages ──────────────────
 chokidar.watch(DRIFT_LOG_PATH, { persistent: true, ignoreInitial: true }).on('change', () => {

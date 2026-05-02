@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "type": "__collapse_warning",
+    "triggered": false
+  },
+  {
+    "type": "__collapse_warning",
+    "triggered": false
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "time": "12:45:01",
+    "agent": "ORCHESTRATOR",
+    "msg": "🚀 Initializing CodexMap v1.0.0...",
+    "cls": "text-outline"
+  },
+  {
+    "time": "12:45:02",
+    "agent": "GENERATOR",
+    "msg": "Starting Codex with prompt: \"build an auth database for a banking app\"",
+    "cls": "text-outline"
+  },
+  {
+    "time": "12:45:05",
+    "agent": "CARTOGRAPHER",
+    "msg": "✔ Created file: models/User.js",
+    "cls": "text-outline"
+  },
+  {
+    "time": "12:45:07",
+    "agent": "SENTINEL",
+    "msg": "Scoring models/User.js → 0.92 (High Alignment)",
+    "cls": "text-tertiary"
+  },
+  {
+    "time": "12:45:10",
+    "agent": "CARTOGRAPHER",
+    "msg": "✔ Created file: routes/auth.js",
+    "cls": "text-outline"
+  },
+  {
+    "time": "12:45:12",
+    "agent": "SENTINEL",
+    "msg": "Scoring routes/auth.js → 0.85",
+    "cls": "text-tertiary"
+  },
+  {
+    "time": "12:45:15",
+    "agent": "GENERATOR",
+    "msg": "Drift detected in routes/auth.js (missing password hashing)",
+    "cls": "text-error"
+  }
+]

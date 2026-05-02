@@ -1,5 +1,7 @@
 {
-  "triggered": false,
-  "signals": [],
-  "timestamp": "2026-05-02T07:15:30.239Z"
+  "triggered": true,
+  "signals": [
+    "Red node density: 76.9% (threshold: 40%)"
+  ],
+  "timestamp": "2026-05-02T08:32:19.718Z"
 }

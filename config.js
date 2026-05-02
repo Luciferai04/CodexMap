@@ -1,4 +1,16 @@
-require('dotenv').config();
+// Zero-dependency .env loader
+try {
+  const fs = require('fs');
+  const path = require('path');
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const env = fs.readFileSync(envPath, 'utf8');
+    env.split('\n').forEach(line => {
+      const [key, ...value] = line.split('=');
+      if (key && value) process.env[key.trim()] = value.join('=').trim();
+    });
+  }
+} catch (e) {}
 
 const config = {
   openai: {
@@ -43,7 +55,6 @@ function validate() {
   if (config.openai.apiKey && !config.openai.apiKey.startsWith('sk-'))
     errors.push('OPENAI_API_KEY looks invalid (should start with sk-)');
   const wSum = Object.entries(config.scoring.weights)
-    .filter(([k]) => k !== 'D')
     .reduce((s,[,v]) => s+v, 0);
   if (Math.abs(wSum - 1.0) > 0.01)
     errors.push(`Score weights must sum to 1.0 (got ${wSum.toFixed(2)})`);

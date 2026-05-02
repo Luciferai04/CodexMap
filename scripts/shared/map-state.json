@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "models",
+      "label": "models",
+      "type": "dir"
+    },
+    {
+      "id": "models/User.js",
+      "label": "User.js",
+      "type": "file",
+      "parent": "models",
+      "grade": "green",
+      "score": 0.92
+    },
+    {
+      "id": "routes",
+      "label": "routes",
+      "type": "dir"
+    },
+    {
+      "id": "routes/auth.js",
+      "label": "auth.js",
+      "type": "file",
+      "parent": "routes",
+      "grade": "yellow",
+      "score": 0.85
+    },
+    {
+      "id": "database.js",
+      "label": "database.js",
+      "type": "file",
+      "grade": "green",
+      "score": 0.95
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "routes/auth.js",
+      "target": "models/User.js"
+    },
+    {
+      "id": "e2",
+      "source": "models/User.js",
+      "target": "database.js"
+    }
+  ]
+}

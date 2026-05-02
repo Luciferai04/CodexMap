@@ -20,5 +20,11 @@
     "ws": "^8.16.0"
   },
   "author": "@Somu.ai",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0"
+  }
 }

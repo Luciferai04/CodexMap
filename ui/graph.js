@@ -14,139 +14,101 @@ window.CodexGraph = (function() {
     {
       selector: 'node',
       style: {
-        'shape': 'roundrectangle',
-        'label': 'data(label)',
-        'font-family': 'Roobert PRO Medium, sans-serif',
-        'font-size': '13px',
-        'font-weight': '500',
+        'shape': 'round-rectangle',
+        'background-color': '#ffffff',
+        'border-color': '#c7cad5',
+        'border-width': '1px',
+        'color': 'var(--color-near-black)',
+        'font-family': 'var(--font-display)',
+        'font-size': '14px',
         'text-valign': 'center',
         'text-halign': 'center',
-        'text-wrap': 'ellipsis',
-        'text-max-width': '140px',
-        'padding': '10px',
-        'border-width': '1.5px',
+        'padding': '12px',
         'width': 'label',
-        'height': '40px',
-        'min-width': '80px',
-        'transition-property': 'background-color, border-color, color, opacity',
-        'transition-duration': '0.3s'
+        'height': 'label',
+        'min-width': '100px',
+        'min-height': '45px',
+        // 4px Left Accent Border via linear-gradient
+        'background-image': 'linear-gradient(to right, #a5a8b5 4px, #ffffff 4px)',
+        'background-repeat': 'no-repeat',
+        'background-size': '100% 100%'
       }
     },
     {
       selector: 'node[grade="green"]',
       style: {
-        'background-color': '#c3faf5',
-        'border-color': '#187574',
-        'color': '#187574'
+        'background-color': 'var(--color-teal-light)',
+        'background-image': 'linear-gradient(to right, var(--color-teal-dark) 4px, var(--color-teal-light) 4px)',
+        'border-color': 'var(--color-teal-dark)',
       }
     },
     {
       selector: 'node[grade="yellow"]',
       style: {
-        'background-color': '#ffe6cd',
-        'border-color': '#d4850a',
-        'color': '#746019'
+        'background-color': 'var(--color-orange-light)',
+        'background-image': 'linear-gradient(to right, var(--color-orange-dark) 4px, var(--color-orange-light) 4px)',
+        'border-color': 'var(--color-orange-dark)',
       }
     },
     {
       selector: 'node[grade="red"]',
       style: {
-        'background-color': '#ffc6c6',
-        'border-color': '#600000',
-        'color': '#600000'
-      }
-    },
-    {
-      selector: 'node[grade="pending"]',
-      style: {
-        'background-color': '#f0f0f0',
-        'border-color': '#c7cad5',
-        'color': '#a5a8b5'
+        'background-color': 'var(--color-coral-light)',
+        'background-image': 'linear-gradient(to right, var(--color-coral-dark) 4px, var(--color-coral-light) 4px)',
+        'border-color': 'var(--color-coral-dark)',
       }
     },
     {
       selector: 'node:parent',
       style: {
         'background-color': '#fde0f0',
-        'background-opacity': 0.4,
+        'background-opacity': 0.5,
         'border-style': 'dashed',
-        'border-width': '1.5px',
         'border-color': '#c7cad5',
-        'label': 'data(label)',
+        'border-width': '1.5px',
         'font-family': 'IBM Plex Mono, monospace',
         'font-size': '10px',
         'text-valign': 'top',
-        'text-halign': 'left',
-        'text-margin-y': '-4px',
+        'text-halign': 'center',
         'text-transform': 'uppercase',
-        'shape': 'roundrectangle',
-        'padding': '20px'
+        'color': '#555a6a',
+        'padding': '20px',
+        'border-radius': '20px',
       }
     },
     {
       selector: 'edge',
       style: {
-        'width': 2,
         'line-color': '#c7cad5',
         'target-arrow-color': '#c7cad5',
         'target-arrow-shape': 'triangle',
         'curve-style': 'bezier',
-        'target-endpoint': 'outside-node',
-        'source-endpoint': 'outside-node',
+        'width': 1.5,
+        'opacity': 0.6,
         'arrow-scale': 1.2,
-        'opacity': 0.8,
-        'transition-property': 'line-color, target-arrow-color, opacity',
-        'transition-duration': '0.3s'
       }
     },
     {
-      selector: 'edge[danger]',
+      selector: 'edge[danger="true"], edge[targetGrade="red"]',
       style: {
         'line-style': 'dashed',
-        'line-color': '#ff6b6b',
-        'target-arrow-color': '#ff6b6b',
-        'opacity': 1.0,
+        'line-color': '#600000',
+        'target-arrow-color': '#600000',
+        'opacity': 0.7,
         'label': '⚠ drift',
-        'font-family': 'IBM Plex Mono, monospace',
-        'font-size': '10px',
+        'font-size': '9px',
         'color': '#600000',
-        'text-background-opacity': 1,
-        'text-background-color': '#fff',
-        'text-background-padding': '2px',
-        'text-margin-y': '-10px'
       }
     },
-    // FIX #3: dedicated .selected class (not :selected pseudo) for reliable styling
     {
       selector: 'node.selected',
       style: {
-        'border-width': '2.5px',
         'border-color': '#5b76fe',
+        'border-width': '2.5px',
         'overlay-color': '#5b76fe',
-        'overlay-opacity': 0.08
+        'overlay-opacity': 0.06,
       }
     },
-    {
-      selector: 'node.hidden',
-      style: { 'display': 'none' }
-    },
-    {
-      
-    {
-      selector: 'node[type="block"]',
-      style: {
-        'shape': 'hexagon',
-        'background-color': '#f8f9fa',
-        'border-color': '#adb5bd',
-        'border-style': 'dashed',
-        'border-width': '1px',
-        'font-family': 'IBM Plex Mono, monospace',
-        'font-size': '10px',
-        'padding': '5px',
-        'height': '20px'
-      }
-    },
-
     {
       selector: 'node.dimmed',
       style: {
@@ -162,17 +124,24 @@ window.CodexGraph = (function() {
 
     cy = cytoscape({
       container: container,
-      renderer: { name: 'gl' },  // WebGL Renderer Fallback
-      layout: { name: 'grid' },
+      layout: { name: 'cose-bilkent' },
       wheelSensitivity: 0.2,
       minZoom: 0.1,
       maxZoom: 3,
       style: MIRO_STYLE,
-      // Transparent background so CSS dot grid shows through
+      // These ensure the canvas bg is transparent:
       styleEnabled: true,
       textureOnViewport: false,
-      pixelRatio: 'auto'
+      pixelRatio: 'auto',
     });
+
+    // Cytoscape's own background must be transparent:
+    cy.style().selector('core').style({
+      'active-bg-color': '#5b76fe',
+      'active-bg-opacity': 0.1,
+      'outside-texture-bg-color': '#ffffff',
+      'outside-texture-bg-opacity': 0,
+    }).update();
 
     // FIX #3: Wait for cy.ready() before registering interactions
     cy.ready(() => {
@@ -197,9 +166,12 @@ window.CodexGraph = (function() {
       const node = evt.target;
       console.log('[Graph] leaf node tapped:', node.id());
       
-      // Visual feedback — blue ring
+      // Visual feedback
       cy.elements().removeClass('selected');
       node.addClass('selected');
+      
+      // Ensure panel expansion is triggered
+      document.getElementById('workspace').classList.add('panel-open');
       
       window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
     });
@@ -223,6 +195,7 @@ window.CodexGraph = (function() {
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
         cy.elements().removeClass('selected');
+        document.getElementById('workspace').classList.remove('panel-open');
         if (window.closePanel) window.closePanel();
       }
     });
