@@ -19,6 +19,20 @@ original prompt. When the AI starts drifting — you see it happen.
 - **Self-healing** — click any red node to re-anchor it to your intent
 - **Architectural collapse warning** — fires when drift compounds systemwide
 - **PageIndex integration** — vectorless RAG for reasoning-based scoring
+- **Production-grade security** — CSP, WebSocket origin checks, and input sanitization
+- **Cost management** — Real-time API token and USD cost tracking dashboard
+
+## Production Hardening (v1.0.0)
+
+CodexMap v1.0.0 introduces critical improvements for reliability and security:
+
+- **Resilient Orchestration**: Agents now feature auto-recovery (restart on crash) and centralized error logging.
+- **Security First**: 
+    - Content Security Policy (CSP) headers enforced on the dashboard.
+    - Local-only WebSocket connectivity to prevent remote hijacking.
+    - Path-traversal protection on all management API endpoints.
+- **Zero-Dependency Core**: Key agents modified for maximum portability, running even in restricted environments.
+- **Cost Transparency**: Live sidebar widget tracks your OpenAI bill in real-time.
 
 ## Quick start
 
