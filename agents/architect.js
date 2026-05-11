@@ -2,25 +2,21 @@ const chokidar = require('chokidar');
 const fs = require('fs');
 const path = require('path');
 const { computeCyclomatic } = require('../scripts/cyclomatic');
+const { atomicWriteJson: writeJsonAtomically, readJsonSafe: readJsonAtomicallySafe, ensureDir } = require('../lib/atomic');
 
 const ROOT = path.resolve(__dirname, '..');
-const STATE_PATH = path.join(ROOT, 'shared', 'map-state.json');
-const ARCH_PATH = path.join(ROOT, 'shared', 'arch-health.json');
+const SHARED_DIR = path.resolve(process.env.CODEXMAP_SHARED_DIR || path.join(ROOT, 'shared'));
+const STATE_PATH = path.join(SHARED_DIR, 'map-state.json');
+const ARCH_PATH = path.join(SHARED_DIR, 'arch-health.json');
 const DEBOUNCE_MS = 1000;
 const MAX_CODE_SIZE = 100000;
 
 function safeReadJson(filePath, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (_) {
-    return fallback;
-  }
+  return readJsonAtomicallySafe(filePath, fallback);
 }
 
 function atomicWriteJson(filePath, value) {
-  const tmpPath = `${filePath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(value, null, 2));
-  fs.renameSync(tmpPath, filePath);
+  writeJsonAtomically(filePath, value);
 }
 
 function computeRedNodeRatio(nodes) {
@@ -131,7 +127,7 @@ function scheduleRecompute() {
 }
 
 if (!fs.existsSync(path.dirname(ARCH_PATH))) {
-  fs.mkdirSync(path.dirname(ARCH_PATH), { recursive: true });
+  ensureDir(path.dirname(ARCH_PATH));
 }
 
 if (!fs.existsSync(ARCH_PATH)) {

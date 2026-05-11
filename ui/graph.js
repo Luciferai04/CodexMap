@@ -1,511 +1,1057 @@
 /**
- * ui/graph.js — Cytoscape.js implementation for CodexMap
- * Implements Miro design system nodes, edges, and interactions.
- * 
- * FIX #3: Uses cy.ready() + node:childless / node:parent selectors
- *         to ensure compound nodes work correctly with click handlers.
+ * ui/graph.js - Cytoscape renderer for the Miro-style CodexMap canvas.
  */
+
+if (typeof cytoscape !== 'undefined' && typeof fcose !== 'undefined') {
+  try {
+    cytoscape.use(fcose);
+    console.log('[GRAPH] fcose registered');
+  } catch (error) {
+    console.warn('[GRAPH] fcose registration skipped:', error.message);
+  }
+}
 
 window.CodexGraph = (function() {
   let cy;
   let tooltip;
+  let pendingState = null;
+  let viewMode = localStorage.getItem(window.CodexUI?.STORAGE?.viewMode || 'codexmap.viewMode') || 'overview';
+  let lastSearch = '';
 
-  const MIRO_STYLE = [
+  const expandedNodes = new Set();
+  const gradeFilters = new Set(['green', 'yellow', 'red', 'pending']);
+
+  const GRADE = {
+    green: { bg: '#ecfdf5', border: '#22c55e', text: '#14532d', glow: 'rgba(34,197,94,0.20)' },
+    yellow: { bg: '#fffbeb', border: '#f59e0b', text: '#78350f', glow: 'rgba(245,158,11,0.22)' },
+    red: { bg: '#fef2f2', border: '#ef4444', text: '#7f1d1d', glow: 'rgba(239,68,68,0.22)' },
+    pending: { bg: '#f8fafc', border: '#94a3b8', text: '#475569', glow: 'rgba(148,163,184,0.18)' },
+  };
+
+  const CODE_NODE_TYPES = new Set(['file', 'function', 'block', 'logic_block']);
+  const DETAIL_TYPES = new Set(['function', 'block', 'logic_block']);
+  const CRITICAL_YELLOW_SCORE = 0.45;
+
+  const REPAIR_STYLE = {
+    queued: { border: '#2563eb', glow: 'rgba(37,99,235,0.24)', style: 'dashed' },
+    healing: { border: '#f97316', glow: 'rgba(249,115,22,0.28)', style: 'dashed' },
+    rescoring: { border: '#5b76fe', glow: 'rgba(91,118,254,0.26)', style: 'dashed' },
+    resolved: { border: '#22c55e', glow: 'rgba(34,197,94,0.24)', style: 'solid' },
+    failed: { border: '#ef4444', glow: 'rgba(239,68,68,0.28)', style: 'dotted' },
+  };
+
+  const STYLE = [
     {
       selector: 'node',
       style: {
-        'shape': 'round-rectangle',
-        'background-color': '#ffffff',
-        'border-color': '#c7cad5',
-        'border-width': '1px',
-        'color': 'var(--color-near-black)',
-        'font-family': 'var(--font-display)',
-        'font-size': '14px',
+        width: 178,
+        height: 56,
+        shape: 'round-rectangle',
+        label: 'data(label)',
         'text-valign': 'center',
         'text-halign': 'center',
-        'padding': '12px',
-        'width': 'label',
-        'height': 'label',
-        'min-width': '100px',
-        'min-height': '45px',
-        // 4px Left Accent Border via linear-gradient
-        'background-image': 'linear-gradient(to right, #a5a8b5 4px, #ffffff 4px)',
-        'background-repeat': 'no-repeat',
-        'background-size': '100% 100%'
-      }
+        'text-wrap': 'ellipsis',
+        'text-max-width': 154,
+        'font-family': '"Roobert", "Noto Sans", sans-serif',
+        'font-size': 13,
+        'font-weight': 700,
+        color: '#172033',
+        'background-color': '#ffffff',
+        'border-color': '#94a3b8',
+        'border-width': 2,
+        'overlay-opacity': 0,
+        'transition-property': 'background-color, border-color, opacity, width, height',
+        'transition-duration': '180ms',
+        'z-index': 20,
+      },
     },
     {
-      selector: 'node[grade="green"]',
+      selector: 'node[type = "file"]',
       style: {
-        'background-color': 'var(--color-teal-light)',
-        'background-image': 'linear-gradient(to right, var(--color-teal-dark) 4px, var(--color-teal-light) 4px)',
-        'border-color': 'var(--color-teal-dark)',
-      }
+        width: 190,
+        height: 58,
+        'font-size': 13,
+      },
     },
     {
-      selector: 'node[grade="yellow"]',
+      selector: 'node[type = "function"], node[type = "logic_block"]',
       style: {
-        'background-color': 'var(--color-orange-light)',
-        'background-image': 'linear-gradient(to right, var(--color-orange-dark) 4px, var(--color-orange-light) 4px)',
-        'border-color': 'var(--color-orange-dark)',
-      }
-    },
-    {
-      selector: 'node[grade="red"]',
-      style: {
-        'background-color': 'var(--color-coral-light)',
-        'background-image': 'linear-gradient(to right, var(--color-coral-dark) 4px, var(--color-coral-light) 4px)',
-        'border-color': 'var(--color-coral-dark)',
-      }
-    },
-    {
-      selector: 'node:parent',
-      style: {
-        'background-color': '#fde0f0',
-        'background-opacity': 0.5,
+        width: 156,
+        height: 46,
+        'font-size': 12,
         'border-style': 'dashed',
-        'border-color': '#c7cad5',
-        'border-width': '1.5px',
-        'font-family': 'IBM Plex Mono, monospace',
-        'font-size': '10px',
+      },
+    },
+    {
+      selector: 'node[type = "block"]',
+      style: {
+        width: 122,
+        height: 38,
+        'font-size': 10,
+        'border-style': 'dashed',
+      },
+    },
+    {
+      selector: 'node[type = "directory"], node:parent',
+      style: {
+        'background-color': 'rgba(255,255,255,0.28)',
+        'background-opacity': 0.28,
+        'border-color': 'rgba(23,32,51,0.16)',
+        'border-style': 'dashed',
+        'border-width': 1,
+        padding: 28,
+        label: 'data(label)',
         'text-valign': 'top',
-        'text-halign': 'center',
+        'text-halign': 'left',
+        'text-margin-x': 12,
+        'text-margin-y': 10,
+        'font-family': '"IBM Plex Mono", monospace',
+        'font-size': 10,
+        'font-weight': 700,
         'text-transform': 'uppercase',
-        'color': '#555a6a',
-        'padding': '20px',
-        'border-radius': '20px',
-      }
-    },
-    {
-      selector: 'edge',
-      style: {
-        'line-color': '#c7cad5',
-        'target-arrow-color': '#c7cad5',
-        'target-arrow-shape': 'triangle',
-        'curve-style': 'bezier',
-        'width': 1.5,
-        'opacity': 0.6,
-        'arrow-scale': 1.2,
-      }
-    },
-    {
-      selector: 'edge[danger="true"], edge[targetGrade="red"]',
-      style: {
-        'line-style': 'dashed',
-        'line-color': '#600000',
-        'target-arrow-color': '#600000',
-        'opacity': 0.7,
-        'label': '⚠ drift',
-        'font-size': '9px',
-        'color': '#600000',
-      }
+        color: '#667085',
+        'z-index': 1,
+      },
     },
     {
       selector: 'node.selected',
       style: {
         'border-color': '#5b76fe',
-        'border-width': '2.5px',
+        'border-width': 3,
         'overlay-color': '#5b76fe',
-        'overlay-opacity': 0.06,
-      }
+        'overlay-opacity': 0.08,
+      },
     },
     {
-      selector: 'node.dimmed',
+      selector: 'edge',
       style: {
-        'opacity': 0.2,
-        'text-opacity': 0.3
-      }
-    }
+        width: 1.2,
+        opacity: 0.42,
+        'curve-style': 'bezier',
+        'line-color': '#98a2b3',
+        'target-arrow-color': '#98a2b3',
+        'target-arrow-shape': 'triangle',
+        'arrow-scale': 0.9,
+        'source-endpoint': 'outside-to-node',
+        'target-endpoint': 'outside-to-node',
+        'z-index': 4,
+      },
+    },
+    {
+      selector: 'edge.hot',
+      style: {
+        width: 2.2,
+        opacity: 0.9,
+        'line-color': '#ef4444',
+        'target-arrow-color': '#ef4444',
+        'line-style': 'dashed',
+      },
+    },
+    {
+      selector: '.faded',
+      style: {
+        opacity: 0.13,
+      },
+    },
   ];
 
   function init() {
     const container = document.getElementById('canvas-container');
-    showSkeletons();
-
     cy = cytoscape({
-      container: container,
-      layout: { name: 'cose-bilkent' },
-      wheelSensitivity: 0.2,
-      minZoom: 0.1,
-      maxZoom: 3,
-      style: MIRO_STYLE,
-      // These ensure the canvas bg is transparent:
-      styleEnabled: true,
-      textureOnViewport: false,
-      pixelRatio: 'auto',
+      container,
+      layout: { name: 'preset' },
+      style: STYLE,
+      wheelSensitivity: 0.22,
+      minZoom: 0.08,
+      maxZoom: 2.8,
     });
 
-    // Cytoscape's own background must be transparent:
-    cy.style().selector('core').style({
-      'active-bg-color': '#5b76fe',
-      'active-bg-opacity': 0.1,
-      'outside-texture-bg-color': '#ffffff',
-      'outside-texture-bg-opacity': 0,
-    }).update();
-
-    // FIX #3: Wait for cy.ready() before registering interactions
-    cy.ready(() => {
-      console.log('[Graph] Cytoscape ready, registering interactions');
-      setupInteractions();
-      setupToolbars();
-    });
-    
-    // Create tooltip element
     tooltip = document.createElement('div');
     tooltip.className = 'codex-tooltip';
     document.body.appendChild(tooltip);
+
+    setupInteractions();
+    setupControls();
+
+    cy.on('zoom pan', () => {
+      updateZoomLabel();
+      renderMinimap();
+      updateSmartLabels();
+    });
+
+    cy.on('layoutstop', () => {
+      applyVisibility({ layout: false });
+      fitVisible(36, false);
+      renderMinimap();
+    });
+
+    window.CodexUI?.updateViewModeButtons(viewMode);
+
+    if (pendingState) {
+      update(pendingState);
+      pendingState = null;
+    }
+  }
+
+  function setupControls() {
+    document.getElementById('btn-fit')?.addEventListener('click', () => fitVisible());
+    document.getElementById('btn-zoom-in')?.addEventListener('click', () => zoomBy(1.18));
+    document.getElementById('btn-zoom-out')?.addEventListener('click', () => zoomBy(1 / 1.18));
+    document.getElementById('btn-layout')?.addEventListener('click', () => runLayout({ force: true }));
+
+    document.querySelectorAll('[data-grade-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const grade = button.dataset.gradeFilter;
+        if (gradeFilters.has(grade)) gradeFilters.delete(grade);
+        else gradeFilters.add(grade);
+        button.classList.toggle('active', gradeFilters.has(grade));
+        applyVisibility({ layout: true });
+        window.CodexUI?.showToast(`Showing ${gradeFilters.size} grade filters`);
+      });
+    });
+
+    document.getElementById('clear-grade-filters')?.addEventListener('click', () => {
+      ['green', 'yellow', 'red', 'pending'].forEach((grade) => gradeFilters.add(grade));
+      document.querySelectorAll('[data-grade-filter]').forEach((button) => button.classList.add('active'));
+      applyVisibility({ layout: true });
+    });
   }
 
   function setupInteractions() {
-    // FIX #3: Handle LEAF node click (non-parent / childless nodes)
-    cy.on('dblclick', 'node[type="block"]', (evt) => {
-      cy.animate({ fit: { eles: evt.target, padding: 50 } }, { duration: 300 });
-    });
-
-    cy.on('tap', 'node:childless', (evt) => {
-      const node = evt.target;
-      console.log('[Graph] leaf node tapped:', node.id());
-      
-      // Visual feedback
+    cy.on('tap', 'node', (event) => {
+      const node = event.target;
       cy.elements().removeClass('selected');
       node.addClass('selected');
-      
-      // Ensure panel expansion is triggered
-      document.getElementById('workspace').classList.add('panel-open');
-      
+      window.CodexUI?.setSelectedBreadcrumb(node.data());
+
+      if (shouldExpandInsteadOfInspect(node)) {
+        toggleExpanded(node);
+        return;
+      }
+
       window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
     });
 
-    // FIX #3: Handle COMPOUND (directory) node click — toggle collapse
-    cy.on('tap', 'node:parent', (evt) => {
-      const node = evt.target;
-      console.log('[Graph] parent node tapped:', node.id());
-      
-      // Also dispatch selection for parent panel
-      window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
+    cy.on('dbltap', 'node', (event) => {
+      toggleExpanded(event.target);
     });
 
-    // Hover tooltip — only on leaf nodes
-    cy.on('mouseover', 'node:childless', (evt) => {
-      showTooltip(evt.target, evt.originalEvent || evt.renderedPosition);
+    cy.on('mouseover', 'node', (event) => {
+      const node = event.target;
+      if (node.style('display') === 'none') return;
+      showTooltip(node, event.originalEvent || event.renderedPosition);
     });
-    cy.on('mouseout', 'node', () => hideTooltip());
 
-    // FIX #3: Tap on canvas background closes the panel
-    cy.on('tap', (evt) => {
-      if (evt.target === cy) {
-        cy.elements().removeClass('selected');
-        document.getElementById('workspace').classList.remove('panel-open');
-        if (window.closePanel) window.closePanel();
+    cy.on('mouseout', 'node', hideTooltip);
+  }
+
+  function shouldExpandInsteadOfInspect(node) {
+    if (DETAIL_TYPES.has(node.data('type'))) return false;
+    return hiddenChildren(node).length > 0 || (node.isParent() && !expandedNodes.has(node.id()));
+  }
+
+  function hiddenChildren(node) {
+    return childrenOf(node.id()).filter((child) => child.style('display') === 'none');
+  }
+
+  function toggleExpanded(node) {
+    const id = node.id();
+    if (expandedNodes.has(id)) {
+      expandedNodes.delete(id);
+      window.CodexUI?.showToast(`Collapsed ${node.data('label') || id}`);
+    } else {
+      expandedNodes.add(id);
+      window.CodexUI?.showToast(`Expanded ${node.data('label') || id}`);
+    }
+    applyVisibility({ layout: true });
+  }
+
+  function setViewMode(mode) {
+    viewMode = mode || 'overview';
+    localStorage.setItem(window.CodexUI?.STORAGE?.viewMode || 'codexmap.viewMode', viewMode);
+    window.CodexUI?.updateViewModeButtons(viewMode);
+    lastSearch = '';
+    const searchInput = document.getElementById('node-search');
+    if (searchInput) searchInput.value = '';
+    applyVisibility({ layout: true });
+    window.CodexUI?.showToast(`${labelForMode(viewMode)} view`);
+  }
+
+  function labelForMode(mode) {
+    return {
+      overview: 'Overview',
+      files: 'Files',
+      functions: 'Functions',
+      drift: 'Drift-only',
+      critical: 'Critical path',
+    }[mode] || 'Overview';
+  }
+
+  function nodeLabel(rawNode) {
+    const raw = typeof rawNode.label === 'string' ? rawNode.label.trim() : '';
+    if (raw) return raw;
+    return String(rawNode.id || '')
+      .split('/')
+      .pop()
+      .replace(/\.(js|ts|jsx|tsx|py|md|json|yml|yaml|css|html)$/i, '');
+  }
+
+  function nodeType(node) {
+    return node.data('type') || 'file';
+  }
+
+  function isCodeLike(node) {
+    return CODE_NODE_TYPES.has(nodeType(node)) && !node.isParent();
+  }
+
+  function normalizedGrade(node) {
+    return node.data('grade') || 'pending';
+  }
+
+  function normalizedScore(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return null;
+    return value > 1 ? value / 100 : value;
+  }
+
+  function scoreForData(data) {
+    return normalizedScore(data?.S_final ?? data?.score);
+  }
+
+  function scoreForNode(node) {
+    return scoreForData(node.data());
+  }
+
+  function isRepairEligibleData(data) {
+    const grade = data?.grade || 'pending';
+    const score = scoreForData(data);
+    return grade === 'red' || (grade === 'yellow' && score != null && score < CRITICAL_YELLOW_SCORE);
+  }
+
+  function isRepairEligibleNode(node) {
+    return isRepairEligibleData(node.data());
+  }
+
+  function normalizeRepairStatus(status) {
+    if (!status) return '';
+    const value = String(status).toLowerCase();
+    if (value === 'pending') return 'queued';
+    if (value === 'running') return 'healing';
+    if (value === 'done') return 'resolved';
+    return value;
+  }
+
+  function hasExpandedAncestor(node) {
+    let parentId = node.data('parentRef');
+    while (parentId) {
+      if (expandedNodes.has(parentId)) return true;
+      const parent = cy.getElementById(parentId);
+      parentId = parent.length ? parent.data('parentRef') : null;
+    }
+    return false;
+  }
+
+  function addWithAncestors(set, node) {
+    set.add(node.id());
+    let parentId = node.data('parentRef');
+    while (parentId) {
+      set.add(parentId);
+      const parent = cy.getElementById(parentId);
+      parentId = parent.length ? parent.data('parentRef') : null;
+    }
+  }
+
+  function addWithDescendants(set, node) {
+    set.add(node.id());
+    childrenOf(node.id()).forEach((child) => addWithDescendants(set, child));
+  }
+
+  function childrenOf(parentId) {
+    if (!cy || !parentId) return cytoscape().collection();
+    return cy.nodes().filter((node) => node.data('parentRef') === parentId);
+  }
+
+  function descendantsOf(parentId) {
+    const out = [];
+    childrenOf(parentId).forEach((child) => {
+      out.push(child);
+      out.push(...descendantsOf(child.id()));
+    });
+    return out;
+  }
+
+  function fileTargetForNode(node) {
+    if (!cy || !node?.length) return '';
+    if (nodeType(node) === 'file') return node.id();
+
+    const directPath = node.data('path');
+    if (directPath) {
+      const direct = cy.getElementById(directPath);
+      if (direct.length && nodeType(direct) === 'file') return direct.id();
+    }
+
+    const idPrefix = String(node.id()).split('::')[0];
+    if (idPrefix) {
+      const prefixed = cy.getElementById(idPrefix);
+      if (prefixed.length && nodeType(prefixed) === 'file') return prefixed.id();
+    }
+
+    let parentId = node.data('parentRef');
+    while (parentId) {
+      const parent = cy.getElementById(parentId);
+      if (!parent.length) break;
+      if (nodeType(parent) === 'file') return parent.id();
+      parentId = parent.data('parentRef');
+    }
+
+    return idPrefix || node.id();
+  }
+
+  function getRepairTargetForNode(nodeId) {
+    if (!cy || !nodeId) return nodeId;
+    const node = cy.getElementById(nodeId);
+    if (node.length) return fileTargetForNode(node);
+    const idPrefix = String(nodeId).split('::')[0];
+    return cy.getElementById(idPrefix).length ? idPrefix : nodeId;
+  }
+
+  function visibleIdsForMode() {
+    const ids = new Set();
+
+    if (!cy) return ids;
+
+    if (viewMode === 'drift') {
+      cy.nodes().forEach((node) => {
+        const grade = normalizedGrade(node);
+        if ((grade === 'red' || grade === 'yellow') && gradeFilters.has(grade)) {
+          addWithAncestors(ids, node);
+        }
+      });
+      return ids;
+    }
+
+    if (viewMode === 'critical') {
+      const redNodes = cy.nodes().filter((node) => normalizedGrade(node) === 'red');
+      const seeds = redNodes.length
+        ? redNodes
+        : cy.nodes().filter((node) => normalizedGrade(node) === 'yellow');
+      seeds.forEach((node) => {
+        if (!gradeFilters.has(normalizedGrade(node))) return;
+        addWithAncestors(ids, node);
+        node.neighborhood('node').forEach((neighbor) => addWithAncestors(ids, neighbor));
+      });
+      return ids;
+    }
+
+    cy.nodes().forEach((node) => {
+      const type = nodeType(node);
+      const grade = normalizedGrade(node);
+      if (!gradeFilters.has(grade)) return;
+
+      if (viewMode === 'overview') {
+        if (type === 'directory' || type === 'file') ids.add(node.id());
+        if ((type === 'function' || type === 'logic_block') && hasExpandedAncestor(node)) ids.add(node.id());
+        if (type === 'block' && expandedNodes.has(node.data('parentRef'))) ids.add(node.id());
+        return;
+      }
+
+      if (viewMode === 'files') {
+        if (type === 'directory' || type === 'file') ids.add(node.id());
+        return;
+      }
+
+      if (viewMode === 'functions') {
+        if (type !== 'block') ids.add(node.id());
+        if (type === 'block' && (expandedNodes.has(node.data('parentRef')) || hasExpandedAncestor(node))) ids.add(node.id());
       }
     });
 
-    cy.on('zoom', () => {
-      const zoomEl = document.getElementById('zoom-level');
-      if (zoomEl) zoomEl.textContent = Math.round(cy.zoom() * 100) + '%';
+    return ids;
+  }
+
+  function applyVisibility({ layout = false } = {}) {
+    if (!cy) return;
+    if (lastSearch) {
+      search(lastSearch, { preserveQuery: true });
+      return;
+    }
+
+    const ids = visibleIdsForMode();
+    cy.startBatch();
+    cy.nodes().forEach((node) => {
+      node.style('display', ids.has(node.id()) ? 'element' : 'none');
+      node.removeClass('faded');
+      applyGradeStyle(node);
+    });
+    cy.edges().forEach((edge) => {
+      const visible = ids.has(edge.source().id()) && ids.has(edge.target().id());
+      edge.style('display', visible ? 'element' : 'none');
+      edge.removeClass('faded');
+      updateEdgeHeat(edge);
+    });
+    cy.endBatch();
+
+    updateCounts();
+    updateEmptyState();
+    updateSmartLabels();
+    renderMinimap();
+
+    if (layout) runLayout();
+  }
+
+  function updateSmartLabels() {
+    if (!cy) return;
+    const zoom = cy.zoom();
+    cy.nodes().forEach((node) => {
+      const type = nodeType(node);
+      const shouldHide = zoom < 0.46 && (type === 'function' || type === 'logic_block' || type === 'block');
+      node.style('label', shouldHide ? '' : node.data('label'));
     });
   }
 
-  function setupToolbars() {
-    document.getElementById('btn-fit')?.addEventListener('click', () => cy.fit(undefined, 40));
-    document.getElementById('btn-zoom-in')?.addEventListener('click', () => {
-      cy.zoom({ level: cy.zoom() * 1.2, position: { x: cy.width() / 2, y: cy.height() / 2 } });
+  function applyGradeStyle(node) {
+    if (node.isParent() && nodeType(node) === 'directory') return;
+    const grade = normalizedGrade(node);
+    const style = GRADE[grade] || GRADE.pending;
+    const repairStatus = normalizeRepairStatus(node.data('repairStatus') || node.data('healStatus'));
+    const repairStyle = REPAIR_STYLE[repairStatus];
+    node.style({
+      'background-color': style.bg,
+      'border-color': repairStyle ? repairStyle.border : style.border,
+      'border-style': repairStyle ? repairStyle.style : (DETAIL_TYPES.has(nodeType(node)) ? 'dashed' : 'solid'),
+      'border-width': repairStyle ? 3.2 : (grade === 'pending' ? 1.5 : 2.5),
+      color: style.text,
+      'shadow-blur': repairStyle ? 22 : (grade === 'pending' ? 0 : 16),
+      'shadow-color': repairStyle ? repairStyle.glow : style.glow,
+      'shadow-opacity': repairStyle ? 0.9 : (grade === 'pending' ? 0 : 0.75),
+      'shadow-offset-x': 0,
+      'shadow-offset-y': 4,
     });
-    document.getElementById('btn-zoom-out')?.addEventListener('click', () => {
-      cy.zoom({ level: cy.zoom() * 0.8, position: { x: cy.width() / 2, y: cy.height() / 2 } });
+  }
+
+  function updateEdgeHeat(edge) {
+    const sourceGrade = edge.source().data('grade') || 'pending';
+    const targetGrade = edge.target().data('grade') || 'pending';
+    edge.data({ sourceGrade, targetGrade });
+    edge.toggleClass('hot', targetGrade === 'red' || (sourceGrade === 'green' && targetGrade === 'red'));
+  }
+
+  function visibleElements() {
+    if (!cy) return null;
+    return cy.elements().filter((element) => element.style('display') !== 'none');
+  }
+
+  function visibleCodeNodes() {
+    if (!cy) return null;
+    const nodes = cy.nodes().filter((node) => node.style('display') !== 'none' && isCodeLike(node));
+    return nodes.length ? nodes : cy.nodes().filter((node) => node.style('display') !== 'none');
+  }
+
+  function runLayout({ force = false } = {}) {
+    if (!cy) return;
+    const nodes = visibleCodeNodes();
+    if (!nodes || !nodes.length) return;
+    const count = nodes.length;
+    const layoutName = force
+      ? (typeof fcose !== 'undefined' ? 'fcose' : 'cose')
+      : (viewMode === 'overview' || viewMode === 'files' || count > 35)
+        ? 'grid'
+        : (typeof fcose !== 'undefined' ? 'fcose' : 'cose');
+
+    if (layoutName === 'grid') {
+      applyGridLayout(nodes);
+      return;
+    }
+
+    cy.layout({
+      name: layoutName,
+      animate: true,
+      animationDuration: 520,
+      fit: false,
+      padding: 70,
+      nodeDimensionsIncludeLabels: true,
+      packComponents: true,
+      nodeSeparation: 70,
+      idealEdgeLength: 170,
+      nodeRepulsion: 2800,
+      gravity: 0.45,
+      randomize: false,
+    }).run();
+  }
+
+  function applyGridLayout(nodes) {
+    const count = nodes.length;
+    const cols = count > 80 ? 8 : count > 52 ? 7 : Math.max(4, Math.ceil(Math.sqrt(count * 1.15)));
+    const xGap = viewMode === 'overview' ? 218 : 208;
+    const yGap = viewMode === 'overview' ? 94 : 90;
+
+    cy.startBatch();
+    nodes.forEach((node, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      node.position({ x: col * xGap, y: row * yGap });
     });
-    
-    // Node search
-    const searchInput = document.getElementById('node-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase().trim();
-        if (!query) {
-          cy.elements().removeClass('dimmed');
-          return;
-        }
-        cy.nodes().forEach(n => {
-          const label = (n.data('label') || '').toLowerCase();
-          const id = (n.data('id') || '').toLowerCase();
-          if (label.includes(query) || id.includes(query)) {
-            n.removeClass('dimmed');
-          } else {
-            n.addClass('dimmed');
-          }
-        });
+    cy.endBatch();
+    fitVisible(36, false);
+    renderMinimap();
+  }
+
+  function fitVisible(padding = 42, animate = true) {
+    if (!cy) return;
+    const nodes = visibleCodeNodes();
+    if (!nodes || !nodes.length) return;
+    if (animate) {
+      cy.animate({ fit: { eles: nodes, padding } }, { duration: 260 });
+    } else {
+      cy.fit(nodes, padding);
+    }
+    if (cy.zoom() < 0.42) {
+      cy.zoom({
+        level: 0.42,
+        renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
       });
+      cy.center(nodes);
+    }
+    updateZoomLabel();
+  }
+
+  function fitDrifted() {
+    if (!cy) return;
+    const drifted = cy.nodes().filter((node) => {
+      const grade = normalizedGrade(node);
+      return node.style('display') !== 'none' && (grade === 'red' || grade === 'yellow');
+    });
+    if (drifted.length) {
+      cy.animate({ fit: { eles: drifted, padding: 70 } }, { duration: 260 });
+      window.CodexUI?.showToast(`Focused ${drifted.length} drifted nodes`);
+    } else {
+      window.CodexUI?.showToast('No visible drifted nodes');
     }
   }
 
-  function showTooltip(node, eventOrPos) {
+  function zoomBy(multiplier) {
+    if (!cy) return;
+    cy.zoom({
+      level: Math.max(cy.minZoom(), Math.min(cy.maxZoom(), cy.zoom() * multiplier)),
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+    });
+    updateZoomLabel();
+  }
+
+  function updateZoomLabel() {
+    const zoomEl = document.getElementById('zoom-level');
+    if (zoomEl && cy) zoomEl.textContent = `${Math.round(cy.zoom() * 100)}%`;
+  }
+
+  function search(rawQuery, options = {}) {
+    if (!cy) return;
+    const query = String(rawQuery || '').trim().toLowerCase();
+    if (!options.preserveQuery) lastSearch = query;
+
+    if (!query) {
+      lastSearch = '';
+      applyVisibility({ layout: false });
+      return;
+    }
+
+    const visible = new Set();
+    const matched = cy.nodes().filter((node) => {
+      const data = node.data();
+      return [data.label, data.id, data.path, data.summary]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+
+    matched.forEach((node) => {
+      addWithAncestors(visible, node);
+      addWithDescendants(visible, node);
+    });
+
+    cy.startBatch();
+    cy.nodes().forEach((node) => {
+      const show = visible.has(node.id());
+      node.style('display', show ? 'element' : 'none');
+      node.toggleClass('faded', !matched.contains(node) && show);
+    });
+    cy.edges().forEach((edge) => {
+      const show = visible.has(edge.source().id()) && visible.has(edge.target().id());
+      edge.style('display', show ? 'element' : 'none');
+      edge.toggleClass('faded', !matched.contains(edge.source()) && !matched.contains(edge.target()));
+    });
+    cy.endBatch();
+
+    if (matched.length) {
+      cy.animate({ fit: { eles: matched, padding: 86 } }, { duration: 220 });
+    }
+    updateCounts();
+    renderMinimap();
+  }
+
+  function updateCounts() {
+    if (!cy) return;
+    const counts = { green: 0, yellow: 0, red: 0, pending: 0 };
+    let visibleCount = 0;
+
+    cy.nodes().forEach((node) => {
+      if (nodeType(node) === 'block') return;
+      const grade = normalizedGrade(node);
+      counts[grade] = (counts[grade] || 0) + 1;
+      if (node.style('display') !== 'none' && !node.isParent()) visibleCount++;
+    });
+
+    Object.entries(counts).forEach(([grade, count]) => {
+      const el = document.getElementById(`count-${grade}`);
+      if (el) el.textContent = count;
+    });
+
+    const visibleEl = document.getElementById('visible-node-count');
+    if (visibleEl) visibleEl.textContent = visibleCount;
+
+    const totalEl = document.getElementById('node-count');
+    if (totalEl) totalEl.textContent = `${cy.nodes().length} nodes`;
+
+    window.CodexIncident?.refresh?.();
+  }
+
+  function updateEmptyState() {
+    const empty = document.getElementById('canvas-empty-state');
+    if (!empty || !cy) return;
+    empty.hidden = cy.nodes().length > 0;
+  }
+
+  function renderMinimap() {
+    const container = document.getElementById('minimap-content');
+    if (!container || !cy) return;
+
+    const nodes = cy.nodes().filter((node) => node.style('display') !== 'none' && isCodeLike(node));
+    if (!nodes.length) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const positions = nodes.map((node) => node.position());
+    const minX = Math.min(...positions.map((p) => p.x));
+    const maxX = Math.max(...positions.map((p) => p.x));
+    const minY = Math.min(...positions.map((p) => p.y));
+    const maxY = Math.max(...positions.map((p) => p.y));
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+
+    container.innerHTML = '';
+    nodes.forEach((node) => {
+      const pos = node.position();
+      const dot = document.createElement('span');
+      dot.className = 'minimap-dot';
+      dot.style.left = `${((pos.x - minX) / width) * 100}%`;
+      dot.style.top = `${((pos.y - minY) / height) * 100}%`;
+      dot.style.background = getGradeColor(normalizedGrade(node));
+      container.appendChild(dot);
+    });
+  }
+
+  function showTooltip(node, eventOrPosition) {
+    if (!tooltip) return;
     const data = node.data();
-    const grade = data.grade || 'pending';
-    const score = data.score != null ? Math.round(data.score * 100) : '--';
-    
+    const grade = normalizedGrade(node);
+    const score = data.S_final ?? data.score;
+    const childCount = childrenOf(node.id()).length;
+    const expandHint = childCount ? `<div class="tooltip-hint">Click to ${expandedNodes.has(node.id()) ? 'collapse' : 'expand'} ${childCount} children</div>` : '';
+
     tooltip.innerHTML = `
-      <div class="tooltip-title">${data.label || data.id}</div>
-      <div class="tooltip-meta">${data.path || data.id}</div>
-      <div class="tooltip-meta">${data.type || 'file'} · ${data.lineCount || 0} lines</div>
+      <div class="tooltip-title">${escapeHtml(data.label || node.id())}</div>
+      <div class="tooltip-meta">${escapeHtml(data.type || 'node')} · ${escapeHtml(data.path || data.id || '')}</div>
       <div class="tooltip-grade">
         <div class="grade-dot" style="background: ${getGradeColor(grade)}"></div>
-        ${grade.toUpperCase()} — ${score}%
+        ${grade.toUpperCase()} · ${score != null ? Math.round(Number(score) * 100) + '%' : '--'}
       </div>
+      ${expandHint}
     `;
-    
-    // Position tooltip
-    if (eventOrPos && eventOrPos.clientX != null) {
-      tooltip.style.left = eventOrPos.clientX + 15 + 'px';
-      tooltip.style.top = eventOrPos.clientY - 40 + 'px';
-    } else if (eventOrPos && eventOrPos.x != null) {
-      tooltip.style.left = eventOrPos.x + 15 + 'px';
-      tooltip.style.top = eventOrPos.y - 40 + 'px';
-    }
+
+    const x = eventOrPosition?.clientX ?? eventOrPosition?.x ?? 24;
+    const y = eventOrPosition?.clientY ?? eventOrPosition?.y ?? 24;
+    tooltip.style.left = `${x + 14}px`;
+    tooltip.style.top = `${y + 14}px`;
     tooltip.classList.add('visible');
   }
 
   function hideTooltip() {
-    tooltip.classList.remove('visible');
+    tooltip?.classList.remove('visible');
   }
 
   function getGradeColor(grade) {
-    if (grade === 'green') return '#00b473';
-    if (grade === 'yellow') return '#d4850a';
-    if (grade === 'red') return '#600000';
-    return '#a5a8b5';
+    return (GRADE[grade] || GRADE.pending).border;
   }
 
-  function pulseRedNode(node) {
-    if (node.data('grade') !== 'red') return;
-    
-    node.animate({
-      style: { 'opacity': 0.65 }
-    }, {
-      duration: 1000,
-      complete: () => {
-        node.animate({
-          style: { 'opacity': 1.0 }
-        }, {
-          duration: 1000,
-          complete: () => {
-            // Only continue pulsing if still red
-            if (node.data('grade') === 'red') pulseRedNode(node);
-          }
-        });
-      }
+  function getIncidentTargets() {
+    if (!cy) return [];
+    const groups = new Map();
+
+    cy.nodes().forEach((node) => {
+      if (!isRepairEligibleNode(node)) return;
+      const targetId = fileTargetForNode(node);
+      if (!targetId) return;
+
+      const targetNode = cy.getElementById(targetId);
+      const targetData = targetNode.length ? targetNode.data() : node.data();
+      const score = scoreForNode(node);
+      const grade = normalizedGrade(node);
+      const current = groups.get(targetId) || {
+        targetId,
+        label: targetData.label || targetId.split('/').pop(),
+        path: targetData.path || targetId,
+        type: targetData.type || 'file',
+        grade: targetData.grade || grade,
+        score: scoreForData(targetData),
+        worstScore: score == null ? 1 : score,
+        redCount: 0,
+        criticalYellowCount: 0,
+        issueCount: 0,
+        issues: [],
+        repairStatus: normalizeRepairStatus(targetData.repairStatus || targetData.healStatus),
+      };
+
+      current.issueCount += 1;
+      if (grade === 'red') current.redCount += 1;
+      if (grade === 'yellow') current.criticalYellowCount += 1;
+      if (score != null && score < current.worstScore) current.worstScore = score;
+      if (grade === 'red') current.grade = 'red';
+      else if (current.grade !== 'red') current.grade = 'yellow';
+
+      current.issues.push({
+        id: node.id(),
+        label: node.data('label') || node.id().split('/').pop(),
+        path: node.data('path') || node.id(),
+        type: nodeType(node),
+        grade,
+        score,
+      });
+
+      groups.set(targetId, current);
+    });
+
+    return [...groups.values()].sort((a, b) => {
+      if (b.redCount !== a.redCount) return b.redCount - a.redCount;
+      if (b.criticalYellowCount !== a.criticalYellowCount) return b.criticalYellowCount - a.criticalYellowCount;
+      return (a.worstScore ?? 1) - (b.worstScore ?? 1);
     });
   }
 
-  function showSkeletons() {
-    const container = document.getElementById('canvas-container');
-    const skeleton = document.createElement('div');
-    skeleton.id = 'loading-skeletons';
-    skeleton.className = 'skeleton-container';
-    for (let i = 0; i < 12; i++) {
-      const rect = document.createElement('div');
-      rect.className = 'skeleton-rect';
-      skeleton.appendChild(rect);
+  function getRiskyRepairTargetsForNode(nodeId) {
+    if (!cy || !nodeId) return [];
+    const node = cy.getElementById(nodeId);
+    if (!node.length) return [];
+    const candidates = [node, ...descendantsOf(nodeId)];
+    const targets = new Set();
+
+    candidates.forEach((candidate) => {
+      if (isRepairEligibleNode(candidate)) {
+        const target = fileTargetForNode(candidate);
+        if (target) targets.add(target);
+      }
+    });
+
+    return [...targets];
+  }
+
+  function focusNodes(nodeIds) {
+    if (!cy) return;
+    const ids = [...new Set((nodeIds || []).filter(Boolean))];
+    if (!ids.length) return;
+    let nodes = cy.collection();
+    ids.forEach((id) => {
+      const node = cy.getElementById(id);
+      if (node.length) nodes = nodes.union(node);
+    });
+    if (!nodes.length) return;
+
+    nodes.forEach((node) => {
+      let parentId = node.data('parentRef');
+      while (parentId) {
+        expandedNodes.add(parentId);
+        const parent = cy.getElementById(parentId);
+        parentId = parent.length ? parent.data('parentRef') : null;
+      }
+    });
+
+    if (viewMode !== 'drift' && viewMode !== 'functions') {
+      viewMode = 'drift';
+      localStorage.setItem(window.CodexUI?.STORAGE?.viewMode || 'codexmap.viewMode', viewMode);
+      window.CodexUI?.updateViewModeButtons(viewMode);
     }
-    container.appendChild(skeleton);
+
+    applyVisibility({ layout: false });
+    cy.animate({ fit: { eles: nodes, padding: 90 } }, { duration: 260 });
   }
 
-  function hideSkeletons() {
-    document.getElementById('loading-skeletons')?.remove();
+  function markRepairState(nodeId, rawStatus, payload = {}) {
+    if (!cy || !nodeId) return;
+    const targetId = getRepairTargetForNode(nodeId);
+    const status = normalizeRepairStatus(rawStatus);
+    const ids = [...new Set([nodeId, targetId].filter(Boolean))];
+
+    ids.forEach((id) => {
+      const node = cy.getElementById(id);
+      if (!node.length) return;
+      node.data({
+        ...node.data(),
+        repairStatus: status,
+        healStatus: rawStatus,
+        repairBatchId: payload.batchId,
+        repairAttemptCount: payload.attemptCount ?? payload.attempt,
+        repairStartedAt: payload.startedAt,
+        repairCompletedAt: payload.completedAt,
+        repairError: payload.error,
+      });
+      applyGradeStyle(node);
+      window.dispatchEvent(new CustomEvent('node-data-updated', { detail: node.data() }));
+    });
+
+    window.dispatchEvent(new CustomEvent('codexmap:repair-state-updated', {
+      detail: { nodeId, targetId, status, payload },
+    }));
   }
 
-  function showEmptyState() {
-    hideSkeletons();
-    // Don't wipe the canvas container — Cytoscape owns it.
-    // Instead, add an overlay.
-    let overlay = document.getElementById('empty-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.id = 'empty-overlay';
-      overlay.className = 'empty-state';
-      overlay.innerHTML = `
-        <div class="empty-title roobert">No nodes yet</div>
-        <div class="empty-desc noto">Run orchestrator.js to begin mapping your codebase.</div>
-        <div class="empty-code">node orchestrator.js "your prompt"</div>
-      `;
-      document.getElementById('canvas-container').appendChild(overlay);
-    }
+  function applyRepairQueue(queueData) {
+    const entries = Array.isArray(queueData)
+      ? queueData
+      : Array.isArray(queueData?.queue)
+        ? queueData.queue
+        : [];
+    entries.forEach((entry) => markRepairState(entry.nodeId, entry.status, entry));
   }
 
-  function hideEmptyState() {
-    document.getElementById('empty-overlay')?.remove();
+  function updateGrade(nodeId, grade, score, payload = {}) {
+    if (!cy) return;
+    const node = cy.getElementById(nodeId);
+    if (!node.length) return;
+
+    node.data({
+      ...node.data(),
+      ...payload,
+      grade,
+      score,
+      S_final: payload.S_final ?? score,
+    });
+    applyGradeStyle(node);
+    node.connectedEdges().forEach(updateEdgeHeat);
+    applyVisibility({ layout: false });
+    window.dispatchEvent(new CustomEvent('node-data-updated', { detail: node.data() }));
+  }
+
+  function normalizeNode(rawNode, knownIds, localNodes) {
+    const parentCandidate = rawNode.path ? rawNode.path.split('/').slice(0, -1).join('/') : undefined;
+    const hasParentCandidate = parentCandidate && (knownIds.has(parentCandidate) || localNodes?.some((node) => node.id === parentCandidate));
+
+    return {
+      ...rawNode,
+      label: nodeLabel(rawNode),
+      grade: rawNode.grade || 'pending',
+      parentRef: rawNode.parent || rawNode.parentRef || (hasParentCandidate ? parentCandidate : undefined),
+      parent: undefined,
+    };
+  }
+
+  function applyDiff(diff) {
+    if (!cy || !diff) return;
+    const normalizedDiff = Array.isArray(diff)
+      ? {
+          nodes: diff.filter((item) => item && item.id && !(item.source && item.target)),
+          edges: diff.filter((item) => item && item.source && item.target),
+        }
+      : diff;
+    const nodes = Array.isArray(normalizedDiff.nodes) ? normalizedDiff.nodes : [];
+    const edges = Array.isArray(normalizedDiff.edges) ? normalizedDiff.edges : [];
+
+    cy.startBatch();
+    const knownIds = new Set(cy.nodes().map((node) => node.id()));
+    const sortedNodes = [...nodes].sort((a, b) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1;
+      if (a.type !== 'directory' && b.type === 'directory') return 1;
+      return 0;
+    });
+
+    sortedNodes.forEach((rawNode) => {
+      const data = normalizeNode(rawNode, knownIds, sortedNodes);
+      const existing = cy.getElementById(data.id);
+      if (existing.length) existing.data({ ...existing.data(), ...data });
+      else cy.add({ group: 'nodes', data });
+      knownIds.add(data.id);
+    });
+
+    edges.forEach((edge) => {
+      if (!knownIds.has(edge.source) || !knownIds.has(edge.target)) return;
+      const id = edge.id || `${edge.source}__${edge.target}`;
+      const existing = cy.getElementById(id);
+      if (existing.length) existing.data({ ...existing.data(), ...edge, id });
+      else cy.add({ group: 'edges', data: { ...edge, id } });
+    });
+    cy.endBatch();
+
+    applyVisibility({ layout: nodes.length > 1 });
+    window.dispatchEvent(new CustomEvent('codexmap:graph-hydrated', {
+      detail: { nodeCount: cy.nodes().length },
+    }));
   }
 
   function update(state) {
-    hideSkeletons();
-    
-    if (!state.nodes || state.nodes.length === 0) {
-      showEmptyState();
+    if (!state || !Array.isArray(state.nodes)) return;
+    if (!cy) {
+      pendingState = state;
       return;
     }
-    
-    hideEmptyState();
+
+    const nodeIds = new Set(state.nodes.map((node) => node.id));
+    const sortedNodes = [...state.nodes].sort((a, b) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1;
+      if (a.type !== 'directory' && b.type === 'directory') return 1;
+      return 0;
+    });
+
+    cy.startBatch();
     cy.elements().remove();
-    
-    // Separate directory nodes from leaf nodes
-    const parents = state.nodes.filter(n => n.type === 'directory');
-    const children = state.nodes.filter(n => n.type !== 'directory');
-
-    // Add parent (directory) nodes first — Cytoscape requires parents before children
-    parents.forEach(node => {
-      // Skip root if it's the only parent and has no meaningful label
-      const parentRef = node.parent || node.parentId;
-      cy.add({
-        group: 'nodes',
-        data: {
-          id: node.id,
-          parent: (parentRef && parentRef !== 'null') ? parentRef : undefined,
-          label: node.label || node.id,
-          type: 'directory',
-          grade: node.grade || 'pending',
-          score: node.score,
-          path: node.path || node.id
-        }
-      });
-    });
-
-    // Add child (file/function) nodes
-    children.forEach(node => {
-      const parentRef = node.parent || node.parentId;
-      // Verify parent exists in cy
-      const parentExists = parentRef && cy.getElementById(parentRef).length > 0;
-      
-      cy.add({
-        group: 'nodes',
-        data: {
-          id: node.id,
-          parent: parentExists ? parentRef : undefined,
-          label: node.label || node.id,
-          type: node.type || 'file',
-          grade: node.grade || 'pending',
-          score: node.score,
-          code: node.code,
-          summary: node.summary,
-          lineCount: node.lineCount || (node.code ? node.code.split('\n').length : 0),
-          path: node.path || node.id,
-          S1: node.S1 || node.scoring_breakdown?.s1,
-          S2: node.S2 || node.scoring_breakdown?.s2,
-          A: node.A || node.scoring_breakdown?.a,
-          T: node.T || node.scoring_breakdown?.t,
-          D: node.D || node.scoring_breakdown?.d
-        }
-      });
-    });
-
-    // Add edges — only if both source and target exist
-    (state.edges || []).forEach(edge => {
-      const srcNode = cy.getElementById(edge.source);
-      const tgtNode = cy.getElementById(edge.target);
-      
-      if (srcNode.length === 0 || tgtNode.length === 0) return;
-      
-      const edgeId = `e-${edge.source}-${edge.target}`;
-      if (cy.getElementById(edgeId).length > 0) return; // dedupe
-
-      const srcGrade = srcNode.data('grade');
-      const tgtGrade = tgtNode.data('grade');
-      
-      // Contamination warning: Green flows into Red
-      const isDanger = srcGrade === 'green' && tgtGrade === 'red';
-
-      cy.add({
+    cy.add(sortedNodes.map((rawNode) => ({
+      group: 'nodes',
+      data: normalizeNode(rawNode, nodeIds, sortedNodes),
+    })));
+    cy.add((state.edges || [])
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+      .map((edge) => ({
         group: 'edges',
-        data: {
-          id: edgeId,
-          source: edge.source,
-          target: edge.target,
-          danger: isDanger || undefined,
-          sourceGrade: srcGrade,
-          targetGrade: tgtGrade
-        }
-      });
-    });
+        data: { ...edge, id: edge.id || `${edge.source}__${edge.target}` },
+      })));
+    cy.endBatch();
 
-    // Run layout
-    try {
-      if (typeof cytoscape !== 'undefined' && cy.nodes().length > 0) {
-        const layoutName = cy.nodes(':parent').length > 0 ? 'cose-bilkent' : 'cose';
-        cy.layout({
-          name: layoutName,
-          animate: false,
-          nodeDimensionsIncludeLabels: true,
-          idealEdgeLength: 100,
-          nodeRepulsion: 8000
-        }).run();
-      }
-    } catch (e) {
-      console.warn('[Graph] Layout error, falling back to grid:', e.message);
-      cy.layout({ name: 'grid' }).run();
-    }
-    
-    // Pulse red nodes
-    cy.nodes('[grade="red"]').forEach(n => pulseRedNode(n));
-    
-    console.log(`[Graph] Rendered ${cy.nodes().length} nodes, ${cy.edges().length} edges`);
+    applyVisibility({ layout: true });
+    window.dispatchEvent(new CustomEvent('codexmap:graph-hydrated', {
+      detail: { nodeCount: state.nodes.length },
+    }));
   }
 
-  function updateGrade(nodeId, grade, score, breakdown) {
-    if (!cy) return;
-    const node = cy.getElementById(nodeId);
-    if (node.length) {
-      node.data({ grade, score });
-      if (breakdown) {
-        node.data({
-          S1: breakdown.s1 ?? breakdown.S1,
-          S2: breakdown.s2 ?? breakdown.S2,
-          A: breakdown.a ?? breakdown.A,
-          T: breakdown.t ?? breakdown.T,
-          D: breakdown.d ?? breakdown.D
-        });
-      }
-      if (grade === 'red') pulseRedNode(node);
-      
-      // Update connected edges for contamination warnings
-      node.connectedEdges().forEach(edge => {
-        const sourceId = edge.data('source');
-        const targetId = edge.data('target');
-        const srcGrade = cy.getElementById(sourceId).data('grade');
-        const tgtGrade = cy.getElementById(targetId).data('grade');
-        
-        const isDanger = srcGrade === 'green' && tgtGrade === 'red';
-        edge.data('danger', isDanger || undefined);
-        edge.data('sourceGrade', srcGrade);
-        edge.data('targetGrade', tgtGrade);
-      });
-
-      // If this node is currently selected, re-dispatch to update panel
-      if (node.hasClass('selected')) {
-        window.dispatchEvent(new CustomEvent('node-selected', { detail: node.data() }));
-      }
-    }
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = String(value ?? '');
+    return div.innerHTML;
   }
-
-  // Expose a test helper for debugging
-  window.testPanelOpen = function() {
-    const testData = {
-      id: 'test-node', label: 'test.js', path: 'src/test.js',
-      type: 'file', grade: 'red', score: 0.28,
-      code: 'function test() {\n  return 42;\n}',
-      summary: 'Test node for debugging panel interactions',
-      lineCount: 3,
-      S1: 0.45, S2: 0.30, A: 0.20, T: 0.15, D: 0.60
-    };
-    window.dispatchEvent(new CustomEvent('node-selected', { detail: testData }));
-  };
 
   return {
     init,
     update,
+    applyDiff,
     updateGrade,
-    isReady: () => !!cy,
-    getCy: () => cy
+    setViewMode,
+    search,
+    fitVisible,
+    fitDrifted,
+    focusNodes,
+    getIncidentTargets,
+    getRiskyRepairTargetsForNode,
+    getRepairTargetForNode,
+    isRepairEligibleData,
+    markRepairState,
+    applyRepairQueue,
+    getCy: () => cy,
   };
 })();
 
-// Initialize on load
 window.addEventListener('DOMContentLoaded', () => {
   window.CodexGraph.init();
 });

@@ -13,9 +13,10 @@ const chokidar = require('chokidar');
 const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
+const { readJsonSafe: readJsonFileSafe, atomicWriteJson, ensureDir } = require('../lib/atomic');
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
-const SHARED_DIR = path.join(__dirname, '..', 'shared');
+const SHARED_DIR = path.resolve(process.env.CODEXMAP_SHARED_DIR || path.join(__dirname, '..', 'shared'));
 const MAP_STATE_PATH = path.join(SHARED_DIR, 'map-state.json');
 const DRIFT_LOG_PATH = path.join(SHARED_DIR, 'session-drift-log.json');
 const GRADE_QUEUE_PATH = path.join(SHARED_DIR, 'grade-queue.json');
@@ -29,6 +30,8 @@ const ARCH_HEALTH_PATH = path.join(SHARED_DIR, 'arch-health.json');
 const HEAL_QUEUE_PATH = path.join(SHARED_DIR, 'heal-queue.json');
 const SETTINGS_PATH = path.join(SHARED_DIR, 'settings.json');
 const AGENT_LOGS_PATH = path.join(SHARED_DIR, 'agent-logs.json');
+const SESSION_ID = process.env.CODEXMAP_SESSION_ID || null;
+ensureDir(SHARED_DIR);
 
 // ─── State ──────────────────────────────────────────────────────────────────
 let lastState = null;
@@ -41,8 +44,24 @@ let batchTimer = null;
 let pendingDiffs = { nodes: [], edges: [] };
 
 // ─── WebSocket Server on configured port ──────────────────────────────────
-const wss = new WebSocket.Server({ port: config.ports.websocket, host: '127.0.0.1' });
-console.log(`[BROADCASTER] WebSocket server started on ws://localhost:${config.ports.websocket}`);
+let wss;
+try {
+  const host = process.env.CODEXMAP_WS_HOST || config.runtime.host || '127.0.0.1';
+  wss = new WebSocket.Server({ port: config.ports.websocket, host });
+
+  wss.on('error', (e) => {
+    console.error(`[BROADCASTER] ✖ WebSocket server error: ${e.message}`);
+    if (e.code === 'EADDRINUSE') {
+      console.error(`[BROADCASTER] Port ${config.ports.websocket} is blocked. Retrying later...`);
+      setTimeout(() => process.exit(1), 2000);
+    }
+  });
+
+  console.log(`[BROADCASTER] WebSocket server started on ws://${host}:${config.ports.websocket}`);
+} catch (e) {
+  console.error(`[BROADCASTER] Failed to start WebSocket server on port ${config.ports.websocket}:`, e.message);
+  setTimeout(() => process.exit(1), 5000);
+}
 
 // FIX #2: Health endpoint for diagnostics
 const http = require('http');
@@ -56,7 +75,7 @@ const healthServer = http.createServer((req, res) => {
   }
 });
 healthServer.listen(0, () => {
-  console.log('[BROADCASTER] Health endpoint → http://localhost:4243/health');
+  console.log('[BROADCASTER] Health endpoint ready');
 });
 
 // ─── Safe send helper ───────────────────────────────────────────────────────
@@ -73,6 +92,11 @@ function safeSend(client, data) {
   return false;
 }
 
+function isSessionWriteAllowed(data) {
+  if (!SESSION_ID) return true;
+  return data && data.sessionId === SESSION_ID;
+}
+
 // ─── Broadcast to all connected clients ─────────────────────────────────────
 function broadcast(data) {
   let sentCount = 0;
@@ -86,12 +110,18 @@ function broadcast(data) {
 
 // ─── Read JSON file safely ──────────────────────────────────────────────────
 function readJsonSafe(filePath, fallback) {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw);
-  } catch (err) {
-    return fallback;
-  }
+  return readJsonFileSafe(filePath, fallback);
+}
+
+function broadcastActivity(agent, action) {
+  broadcast({
+    type: 'agent_activity',
+    payload: {
+      agent,
+      action,
+      timestamp: new Date().toISOString()
+    }
+  });
 }
 
 // ─── Compute diff between old and new state ─────────────────────────────────
@@ -135,31 +165,37 @@ function flushBatch() {
     payload: { nodes: pendingDiffs.nodes, edges: pendingDiffs.edges },
   });
 
+  const addedCount = pendingDiffs.nodes.filter(n => n.type !== 'directory').length;
+  if (addedCount > 0) {
+    const labels = pendingDiffs.nodes.filter(n => n.type !== 'directory').map(n => n.label).slice(0, 3).join(', ');
+    const suffix = addedCount > 3 ? ` (+${addedCount-3} more)` : '';
+    broadcastActivity('Cartographer', `Mapped: ${labels}${suffix}`);
+  }
+
   pendingDiffs = { nodes: [], edges: [] };
   batchTimer = null;
 }
 
 // ─── On new client connection: send full_reset ──────────────────────────────
 wss.on('connection', (ws, req) => {
-  // Only allow connections from localhost
-  const origin = req.headers.origin;
-  const isLocal = !origin || 
-                  origin === 'null' || 
-                  origin?.includes('localhost') || 
-                  origin?.includes('127.0.0.1') ||
-                  origin?.includes('file://');
-  
+  const remoteAddress = req.socket.remoteAddress || '';
+  const isLocal = remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1';
+
   if (!isLocal) {
     ws.close(1008, 'Only local connections allowed');
     return;
   }
 
-  const clientAddr = req.socket.remoteAddress;
+  const clientAddr = remoteAddress;
   console.log(`[BROADCASTER] 🔗 New client connected from ${clientAddr} (total: ${wss.clients.size})`);
 
-  // Send full_reset with current state
-  const currentState = readJsonSafe(MAP_STATE_PATH, { nodes: [], edges: [] });
-  safeSend(ws, { type: 'full_reset', payload: currentState });
+  // ALWAYS send full_reset to new client — this fixes "Disconnected" on page load
+  try {
+    const currentState = readJsonSafe(MAP_STATE_PATH, { nodes: [], edges: [] });
+    safeSend(ws, { type: 'full_reset', payload: currentState });
+  } catch(e) {
+    console.warn('[BROADCASTER] Could not send full_reset:', e.message);
+  }
 
   // Send current drift log
   const driftLog = readJsonSafe(DRIFT_LOG_PATH, []);
@@ -180,57 +216,51 @@ wss.on('connection', (ws, req) => {
     safeSend(ws, { type: 'agent_logs_full', payload: agentLogs });
   }
 
-  // Current heal status
-  const healQueue = readJsonSafe(HEAL_QUEUE_PATH, { queue: [] });
-  for (const entry of healQueue.queue) {
-    if (entry.status === 'healing' || entry.status === 'done' || entry.status === 'failed') {
-      safeSend(ws, { type: 'heal_status_update', payload: { nodeId: entry.nodeId, status: entry.status } });
-    }
-  }
+  const settings = readJsonSafe(SETTINGS_PATH, { autoHeal: false });
+  safeSend(ws, { type: 'settings_update', payload: settings });
 
-  // Handle incoming UI messages for Self-Healing
   ws.on('message', (raw) => {
     try {
-      const data = JSON.parse(raw.toString().slice(0, 4096));
+      const data = JSON.parse(raw.toString());
+
+      if (data.type === 'request_full_reset') {
+        const state = readJsonSafe(MAP_STATE_PATH, { nodes: [], edges: [] });
+        ws.send(JSON.stringify({ type: 'full_reset', payload: state }));
+        console.log('[BROADCASTER] ← Sent full_reset on client request');
+        broadcastActivity('Broadcaster', 'UI re-synchronized full graph state');
+      }
       
       if (data.type === 'set_autoheal') {
+        if (!isSessionWriteAllowed(data)) {
+          console.warn('[BROADCASTER] Ignoring stale set_autoheal message');
+          return;
+        }
         const settings = readJsonSafe(SETTINGS_PATH, { autoHeal: false });
         settings.autoHeal = !!data.enabled;
-        const tmp = SETTINGS_PATH + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(settings));
-        fs.renameSync(tmp, SETTINGS_PATH);
+        atomicWriteJson(SETTINGS_PATH, settings);
         console.log(`[BROADCASTER] Set autoHeal = ${settings.autoHeal}`);
+        broadcastActivity('Orchestrator', `Auto-Healing ${settings.autoHeal ? 'ENABLED' : 'DISABLED'}`);
       }
       
       if (data.type === 'manual_heal') {
+        if (!isSessionWriteAllowed(data)) {
+          console.warn('[BROADCASTER] Ignoring stale manual_heal message');
+          return;
+        }
         const nodeId = data.nodeId;
         if (nodeId) {
           const q = readJsonSafe(HEAL_QUEUE_PATH, { queue: [] });
-          // Check if already in queue and not done/failed
-          const existing = q.queue.find(e => e.nodeId === nodeId);
-          if (existing && existing.status !== 'done' && existing.status !== 'failed') return;
-          
-          q.queue.push({
-            nodeId,
-            status: 'pending',
-            triggeredBy: 'manual',
-            enqueuedAt: new Date().toISOString(),
-            startedAt: null,
-            completedAt: null,
-            attemptCount: 0,
-            lastScore: 0, // Mock, Sentinel will re-score
-            reanchorOutputFlag: true
-          });
-          const tmp = HEAL_QUEUE_PATH + '.tmp';
-          fs.writeFileSync(tmp, JSON.stringify(q, null, 2));
-          fs.renameSync(tmp, HEAL_QUEUE_PATH);
-          console.log(`[BROADCASTER] Enqueued manual heal for ${nodeId}`);
+          if (!q.queue.some(e => e.nodeId === nodeId && e.status !== 'done')) {
+            q.queue.push({
+              nodeId,
+              status: 'pending',
+              triggeredBy: 'manual',
+              enqueuedAt: new Date().toISOString()
+            });
+            atomicWriteJson(HEAL_QUEUE_PATH, q);
+            broadcastActivity('Sentinel', `Manual re-anchor queued: ${nodeId.split('/').pop()}`);
+          }
         }
-      }
-      if (data.type === 'request_full_reset') {
-        const currentState = readJsonSafe(MAP_STATE_PATH, { nodes: [], edges: [] });
-        safeSend(ws, { type: 'full_reset', payload: currentState });
-        console.log('[BROADCASTER] Sent full_reset on client request');
       }
     } catch (e) {
       console.error('[BROADCASTER] Error parsing incoming message:', e);
@@ -328,6 +358,8 @@ chokidar.watch(DRIFT_LOG_PATH, { persistent: true, ignoreInitial: true }).on('ch
     const newEntries = driftLog.slice(lastDriftLog.length).slice(-5);
     for (const entry of newEntries) {
       broadcast({ type: 'drift_score', payload: entry });
+      const score = entry.score;
+      broadcastActivity('Sentinel', `Drift score: ${score}% ${score > 70 ? '🔴 high' : score > 40 ? '🟡 review' : '🟢 aligned'}`);
     }
     lastDriftLog = driftLog;
   }
@@ -338,6 +370,9 @@ chokidar.watch(COLLAPSE_STATE_PATH, { persistent: true, ignoreInitial: true }).o
   const collapseState = readJsonSafe(COLLAPSE_STATE_PATH, null);
   if (collapseState && JSON.stringify(collapseState) !== JSON.stringify(lastCollapseState)) {
     broadcast({ type: 'collapse_warning', payload: collapseState });
+    if (collapseState.triggered) {
+      broadcastActivity('Sentinel', '⚠ Architectural collapse: ' + (collapseState.signals?.[0] || 'threshold exceeded'));
+    }
     lastCollapseState = collapseState;
   }
 });
@@ -393,7 +428,20 @@ chokidar.watch(HEAL_QUEUE_PATH, { persistent: true, ignoreInitial: true }).on('c
   const q = readJsonSafe(HEAL_QUEUE_PATH, { queue: [] });
   for (const entry of q.queue) {
     // Broadcast status for all items to keep UI in sync
-    broadcast({ type: 'heal_status_update', payload: { nodeId: entry.nodeId, status: entry.status } });
+    broadcast({
+      type: 'heal_status_update',
+      payload: {
+        nodeId: entry.nodeId,
+        status: entry.status,
+        batchId: entry.batchId,
+        attemptCount: entry.attemptCount || 0,
+        startedAt: entry.startedAt,
+        completedAt: entry.completedAt,
+        enqueuedAt: entry.enqueuedAt,
+        triggeredBy: entry.triggeredBy,
+        error: entry.error || entry.lastError,
+      }
+    });
   }
 });
 
@@ -416,3 +464,42 @@ lastAgentLogCount = readJsonSafe(AGENT_LOGS_PATH, []).length;
 
 console.log('[BROADCASTER] Agent started successfully');
 console.log(`[BROADCASTER] Watching: map-state.json, drift-log, grade-queue, collapse-state, drift-history, arch-health, heal-queue, agent-logs`);
+
+// Handle incoming IPC messages from Orchestrator
+process.on('message', (msg) => {
+  if (msg && msg.type) {
+    broadcast(msg);
+
+    // Enhanced descriptive activity logs
+    if (msg.type === 'node_grade') {
+      const { id, grade, score } = msg.payload;
+      const fileName = id.split('/').pop();
+      const scoreVal = (score || 0).toFixed(2);
+      broadcastActivity('Sentinel', `Scored ${fileName} → ${grade} (${scoreVal})`);
+    }
+    if (msg.type === 'generation_done') {
+      broadcastActivity('Generator', 'Codex expansion complete. Architecture stabilized.');
+    }
+    if (msg.type === 'heal_progress') {
+      const { label, attempt } = msg.payload || {};
+      const name = label || msg.payload?.nodeId?.split('/').pop() || 'node';
+      broadcastActivity('Healer', `Rewriting ${name}${attempt ? ` (attempt ${attempt})` : ''}...`);
+    }
+    if (msg.type === 'heal_complete') {
+      const { label, grade, improved } = msg.payload || {};
+      const name = label || msg.payload?.nodeId?.split('/').pop() || 'node';
+      const icon = improved ? '✅' : '⚠';
+      broadcastActivity('Healer', `${icon} ${name} → ${grade}`);
+    }
+  }
+});
+
+process.on('SIGINT', () => {
+  console.log('[BROADCASTER] SIGINT received. Shutting down...');
+  process.exit(0);
+});
+
+// Signal readiness to Orchestrator
+if (process.send) {
+  process.send({ type: 'ready' });
+}

@@ -170,6 +170,14 @@
   border-radius: 50px; padding: 2px 8px;
   font-size: 11px; font-family: var(--font-mono);
 }
+.inheritance-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 16px 0;
+  font-size: 11px;
+  color: var(--color-slate);
+}
 .drift-signals { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
 .signals-label { 
   font-family: var(--font-display); font-size: 12px;
@@ -247,3 +255,59 @@
 
 .child-name { font-size: 13px; font-weight: 500; }
 .child-grade { width: 8px; height: 8px; border-radius: 50%; }
+
+/* Real-time Code Viewer */
+.code-preview {
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+  max-height: 250px;
+  transition: max-height 300ms ease;
+  position: relative;
+}
+
+.code-preview.full-view {
+  max-height: 2000px; /* Large enough for most files */
+  overflow-y: auto;
+}
+
+.code-preview code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.live-indicator {
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--color-blue-450);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  animation: pulse-sync 2s infinite;
+}
+
+@keyframes pulse-sync {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.btn-copy {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--color-slate);
+  cursor: pointer;
+  font-family: var(--font-display);
+}
+
+.btn-copy:hover {
+  background: #e2e8f0;
+}

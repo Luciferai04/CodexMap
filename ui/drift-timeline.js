@@ -1,159 +1,224 @@
 /**
- * ui/drift-timeline.js — Real-time drift score visualization
+ * ui/drift-timeline.js - compact drift sparkline for the intelligence drawer.
  */
 
 const DriftTimeline = (() => {
   let points = [];
-  const maxPoints = 50;
+  const maxPoints = 72;
 
   function init() {
-    console.log('[Timeline] Initializing...');
-    initChart();
+    draw();
+    loadInitialData();
   }
 
-  function initChart() {
-    const canvas = document.getElementById('drift-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    // Draw zones immediately (don't wait for data)
-    drawZones(ctx, canvas.width, canvas.height);
-    
-    // Draw placeholder line at 100 (green zone)
-    drawPlaceholderLine(ctx, canvas.width, canvas.height);
-    
-    // Replace "Awaiting" text with a subtle label
-    const container = canvas.parentElement;
-    let placeholder = document.getElementById('drift-placeholder');
-    if (!placeholder) {
-      placeholder = document.createElement('div');
-      placeholder.id = 'drift-placeholder';
-      container.appendChild(placeholder);
+  async function loadInitialData() {
+    try {
+      const response = await fetch('/api/drift-log');
+      const raw = await response.text();
+      const parsed = parseDriftLogText(raw);
+      points = parsed
+        .map((item) => ({
+          score: normalizeScore(item.score),
+          timestamp: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
+        }))
+        .filter((item) => item.score != null)
+        .slice(-maxPoints);
+      draw();
+      if (points.length) window.updateDriftScoreBadge?.(points[points.length - 1].score);
+    } catch (error) {
+      console.warn('[Timeline] Failed to preload drift history:', error.message);
     }
-    placeholder.textContent = 'Waiting for first score...';
-    placeholder.style.cssText = `
-      font-family: var(--font-mono); font-size: 11px;
-      color: #a5a8b5; text-align: center; 
-      margin-top: 4px;
-    `;
   }
 
-  function drawZones(ctx, w, h) {
-    const zones = [
-      { min:0, max:40, color:'rgba(255,198,198,0.15)' },   // coral: critical
-      { min:40, max:70, color:'rgba(255,230,205,0.15)' },  // orange: review
-      { min:70, max:100, color:'rgba(195,250,245,0.15)' }, // teal: aligned
-    ];
-    zones.forEach(({ min, max, color }) => {
-      const y1 = h - (max/100)*h;
-      const y2 = h - (min/100)*h;
-      ctx.fillStyle = color;
-      ctx.fillRect(0, y1, w, y2-y1);
-    });
-    // Zone labels
-    ctx.font = '9px var(--font-mono)';
-    ctx.fillStyle = '#a5a8b5';
-    ctx.fillText('Aligned', 4, h - (85/100)*h);
-    ctx.fillText('Review', 4, h - (55/100)*h);
-    ctx.fillText('Critical', 4, h - (20/100)*h);
-    // Y-axis markers
-    [0,40,70,100].forEach(v => {
-      const y = h - (v/100)*h;
-      ctx.strokeStyle = '#e0e2e8';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
-      ctx.fillStyle = '#a5a8b5';
-      ctx.fillText(v, w-18, y-2);
-    });
-  }
+  function addDataPoint(payloadOrScore, timestamp) {
+    const score = typeof payloadOrScore === 'object' && payloadOrScore !== null
+      ? normalizeScore(payloadOrScore.score)
+      : normalizeScore(payloadOrScore);
+    if (score == null) return;
 
-  function drawPlaceholderLine(ctx, w, h) {
-    ctx.beginPath();
-    ctx.strokeStyle = '#c7cad5';
-    ctx.setLineDash([5, 5]);
-    ctx.moveTo(0, h - (100/100)*h);
-    ctx.lineTo(w, h - (100/100)*h);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  function addDataPoint(payload) {
     points.push({
-      score: payload.score,
-      timestamp: Date.now()
+      score,
+      timestamp: timestamp ? Date.parse(timestamp) || Date.now() : Date.now(),
     });
     if (points.length > maxPoints) points.shift();
-    redrawChart();
+    draw();
+    window.updateDriftScoreBadge?.(score);
   }
 
-  function redrawChart() {
+  function draw() {
     const canvas = document.getElementById('drift-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawZones(ctx, canvas.width, canvas.height);
-    
-    if (points.length === 0) {
-      drawPlaceholderLine(ctx, canvas.width, canvas.height);
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    drawBackground(ctx, width, height);
+
+    if (!points.length) {
+      drawEmpty(ctx, width, height);
+      updateInsights(null);
       return;
     }
-    
-    // Remove placeholder text
-    document.getElementById('drift-placeholder')?.remove();
-    
-    // Draw filled area under curve
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    const lastScore = points[points.length-1].score;
-    const lineColor = lastScore>=70 ? '#187574' : lastScore>=40 ? '#d4850a' : '#600000';
-    gradient.addColorStop(0, lineColor + '30');
-    gradient.addColorStop(1, lineColor + '05');
-    
+
+    const lineColor = colorFor(points[points.length - 1].score);
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, hexToRgba(lineColor, 0.22));
+    gradient.addColorStop(1, hexToRgba(lineColor, 0.02));
+
+    const coords = points.map((point, index) => ({
+      x: points.length === 1 ? width - 24 : 16 + (index / (points.length - 1)) * (width - 32),
+      y: height - 16 - (point.score / 100) * (height - 32),
+      point,
+    }));
+
     ctx.beginPath();
-    points.forEach(({ score }, i) => {
-      const x = (i / Math.max(points.length-1,1)) * canvas.width;
-      const y = canvas.height - (score/100) * canvas.height;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    coords.forEach((coord, index) => {
+      if (index === 0) ctx.moveTo(coord.x, coord.y);
+      else ctx.lineTo(coord.x, coord.y);
     });
-    ctx.lineTo(canvas.width, canvas.height);
-    ctx.lineTo(0, canvas.height);
+    ctx.lineTo(coords[coords.length - 1].x, height - 14);
+    ctx.lineTo(coords[0].x, height - 14);
     ctx.closePath();
     ctx.fillStyle = gradient;
     ctx.fill();
-    
-    // Draw line
+
     ctx.beginPath();
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    points.forEach(({ score }, i) => {
-      const x = (i / Math.max(points.length-1,1)) * canvas.width;
-      const y = canvas.height - (score/100) * canvas.height;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    coords.forEach((coord, index) => {
+      if (index === 0) ctx.moveTo(coord.x, coord.y);
+      else ctx.lineTo(coord.x, coord.y);
     });
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     ctx.stroke();
-    
-    // Inflection markers (delta > 10)
-    points.forEach(({ score, timestamp }, i) => {
-      if (i === 0) return;
-      const delta = Math.abs(score - points[i-1].score);
-      if (delta > 10) {
-        const x = (i / Math.max(points.length-1,1)) * canvas.width;
-        const y = canvas.height - (score/100) * canvas.height;
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI*2);
-        ctx.strokeStyle = '#5b76fe';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        // Timestamp label
-        ctx.font = '9px var(--font-mono)';
-        ctx.fillStyle = '#5b76fe';
-        ctx.fillText(new Date(timestamp).toLocaleTimeString('en',
-          {hour:'2-digit',minute:'2-digit'}), x-14, y-10);
-      }
+
+    findInflections().forEach((index) => {
+      const coord = coords[index];
+      if (!coord) return;
+      ctx.beginPath();
+      ctx.arc(coord.x, coord.y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    const last = coords[coords.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    updateInsights(points[points.length - 1]);
+  }
+
+  function drawBackground(ctx, width, height) {
+    const bands = [
+      { min: 70, max: 100, color: 'rgba(34,197,94,0.08)' },
+      { min: 40, max: 70, color: 'rgba(245,158,11,0.08)' },
+      { min: 0, max: 40, color: 'rgba(239,68,68,0.08)' },
+    ];
+    bands.forEach((band) => {
+      const yTop = height - (band.max / 100) * height;
+      const yBottom = height - (band.min / 100) * height;
+      ctx.fillStyle = band.color;
+      ctx.fillRect(0, yTop, width, yBottom - yTop);
+    });
+
+    [40, 70].forEach((mark) => {
+      const y = height - (mark / 100) * height;
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.strokeStyle = 'rgba(102,112,133,0.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
     });
   }
 
-  return { init, addDataPoint };
+  function drawEmpty(ctx, width, height) {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px IBM Plex Mono, monospace';
+    ctx.fillText('waiting for drift scores', 18, height / 2);
+  }
+
+  function updateInsights(latest) {
+    const trend = document.getElementById('drift-trend-label');
+    const insights = document.getElementById('drift-insights');
+    if (!trend || !insights) return;
+
+    if (!latest) {
+      trend.textContent = 'waiting';
+      insights.textContent = 'No drift points yet. Scores will appear as Sentinel grades nodes.';
+      return;
+    }
+
+    const previous = points.length > 1 ? points[points.length - 2] : null;
+    const delta = previous ? latest.score - previous.score : 0;
+    const inflections = findInflections();
+
+    trend.textContent = Math.abs(delta) < 2 ? 'stable' : delta > 0 ? 'improving' : 'dropping';
+    insights.textContent = inflections.length
+      ? `${inflections.length} sharp drop${inflections.length === 1 ? '' : 's'} marked where score fell more than 10 points.`
+      : `Latest score ${Math.round(latest.score)}. No sharp two-point drop detected.`;
+  }
+
+  function findInflections() {
+    const indexes = [];
+    for (let index = 2; index < points.length; index += 1) {
+      const drop = points[index - 2].score - points[index].score;
+      if (drop > 10) indexes.push(index);
+    }
+    return indexes;
+  }
+
+  function parseDriftLogText(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return (text.match(/\{[^{}]*\}/g) || [])
+        .map((chunk) => {
+          try { return JSON.parse(chunk); } catch (_) { return null; }
+        })
+        .filter(Boolean);
+    }
+  }
+
+  function normalizeScore(score) {
+    if (typeof score !== 'number' || Number.isNaN(score)) return null;
+    return score <= 1 ? score * 100 : score;
+  }
+
+  function colorFor(score) {
+    if (score >= 70) return '#22c55e';
+    if (score >= 40) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  function hexToRgba(hex, alpha) {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  return {
+    init,
+    addPoint: addDataPoint,
+  };
 })();
+
+window.DriftTimeline = DriftTimeline;
+window.addEventListener('DOMContentLoaded', () => window.DriftTimeline.init());

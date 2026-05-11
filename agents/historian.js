@@ -2,25 +2,21 @@ const chokidar = require('chokidar');
 const fs = require('fs');
 const path = require('path');
 const simpleGit = require('simple-git');
+const { atomicWriteJson: writeJsonAtomically, readJsonSafe: readJsonAtomicallySafe, ensureDir } = require('../lib/atomic');
 
 const ROOT = path.resolve(__dirname, '..');
-const HISTORY_PATH = path.join(ROOT, 'shared', 'drift-history.json');
-const STATE_PATH = path.join(ROOT, 'shared', 'map-state.json');
-const TRACKING_PATH = path.join(ROOT, 'shared', 'tracking.json');
+const SHARED_DIR = path.resolve(process.env.CODEXMAP_SHARED_DIR || path.join(ROOT, 'shared'));
+const HISTORY_PATH = path.join(SHARED_DIR, 'drift-history.json');
+const STATE_PATH = path.join(SHARED_DIR, 'map-state.json');
+const TRACKING_PATH = path.join(SHARED_DIR, 'tracking.json');
 const MAX_SNAPSHOTS = 500;
 
 function safeReadJson(filePath, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (_) {
-    return fallback;
-  }
+  return readJsonAtomicallySafe(filePath, fallback);
 }
 
 function atomicWriteJson(filePath, value) {
-  const tmpPath = `${filePath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(value, null, 2));
-  fs.renameSync(tmpPath, filePath);
+  writeJsonAtomically(filePath, value);
 }
 
 function getTrackedDir() {
@@ -34,7 +30,7 @@ function getTrackedDir() {
 function ensureHistoryFile() {
   const dirPath = path.dirname(HISTORY_PATH);
   if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
+    ensureDir(dirPath);
   }
 
   if (!fs.existsSync(HISTORY_PATH)) {
@@ -128,3 +124,8 @@ setInterval(async () => {
     // output/ may not be a git repo yet
   }
 }, 5000);
+
+// Notify orchestrator that we are ready
+if (process.send) {
+  process.send({ type: 'ready' });
+}

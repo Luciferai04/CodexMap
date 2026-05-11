@@ -1,4 +1,2 @@
-openai>=1.0.0
-numpy>=1.24.0
-requests>=2.28.0
-rank-bm25>=0.2.2
+# Optional dependencies for legacy Python components (if any)
+# Core scoring is now native Node.js

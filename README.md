@@ -18,53 +18,115 @@ original prompt. When the AI starts drifting — you see it happen.
 - **Drift detection** — cosine similarity scores every node vs your prompt
 - **Self-healing** — click any red node to re-anchor it to your intent
 - **Architectural collapse warning** — fires when drift compounds systemwide
+- **Persistent project graph** — `codexmap index` creates `.codexmap/knowledge-graph.json`
+- **Codebase Q&A context** — `ask`, `context`, `diff`, and `onboard` help developers understand a project before or after generation
 - **PageIndex integration** — vectorless RAG for reasoning-based scoring
 - **Production-grade security** — CSP, WebSocket origin checks, and input sanitization
 - **Cost management** — Real-time API token and USD cost tracking dashboard
 
-## Production Hardening (v1.0.0)
+## Productionization Status
 
-CodexMap v1.0.0 introduces critical improvements for reliability and security:
+CodexMap is now packaged as a productionizable `0.1.0-alpha.1` local sidecar. It is not a final enterprise release yet, but the runtime is shaped for npm distribution and Codex-first local use:
 
-- **Resilient Orchestration**: Agents now feature auto-recovery (restart on crash) and centralized error logging.
-- **Security First**: 
-    - Content Security Policy (CSP) headers enforced on the dashboard.
-    - Local-only WebSocket connectivity to prevent remote hijacking.
-    - Path-traversal protection on all management API endpoints.
-- **Zero-Dependency Core**: Key agents modified for maximum portability, running even in restricted environments.
-- **Cost Transparency**: Live sidebar widget tracks your OpenAI bill in real-time.
+- **NPX-ready CLI**: `codexmap run`, `watch`, `doctor`, `clean`, `engines`, and `sessions`.
+- **Session isolation**: mutable state lives in `.codexmap/sessions/<session-id>/`, not inside the installed package.
+- **Engine adapters**: Codex CLI is first-class, with a fake engine for deterministic tests and a boundary for future Claude Code/Gemini/OpenCode adapters.
+- **Local security posture**: localhost binding, CSP headers, origin checks, path traversal protection, and redacted diagnostics.
+- **Trust path**: fake-engine E2E, package smoke test, CI, and npm provenance publish workflow.
 
-## Quick start
+See `PRODUCTION_READINESS.md` for the exact release gates and remaining enterprise-hardening items.
+
+## Quick Start
 
 ### Prerequisites
 - Node.js >= 18
 - Python >= 3.9
-- OpenAI API key with Codex CLI access
+- `pipx` for the clean Python-style launcher
+- Codex CLI on `PATH` for real generation
+- `OPENAI_API_KEY` or `CODEX_API_KEY` for real Codex runs
 
-### Install
+### One Command
 
-git clone https://github.com/Luciferai04/codexMap
-cd codexmap
-npm install
-pip install -r requirements.txt
-cp .env.example .env
-# Add your OPENAI_API_KEY to .env
+```bash
+pipx run codexmap "Build a REST API for todos with auth and PostgreSQL"
+```
 
-### Run
+Installed version:
 
-node orchestrator.js "Build a REST API for a todo app with auth" --auto-heal
-open ui/index.html
+```bash
+pipx install codexmap
+codexmap "Build a REST API for todos with auth and PostgreSQL"
+```
+
+Node-native fallback:
+
+```bash
+npx codexmap "Build a todo app with auth"
+```
+
+You can quote the prompt, but you do not have to. CodexMap treats unknown words as the prompt and starts the live drift canvas.
+
+### Advanced Usage
+
+```bash
+npx codexmap doctor
+npx codexmap index
+npx codexmap ask where is authentication handled
+npx codexmap context add password reset flow
+npx codexmap diff
+npx codexmap onboard
+```
+
+If you do not want cloud scoring yet:
+
+```bash
+npx codexmap "Build a todo app" --no-cloud-scoring
+```
+
+Local development:
+
+```bash
+CODEXMAP_NPM_SPEC="$PWD" pipx run --spec ./python-wrapper codexmap doctor --no-cloud-scoring
+node bin/codexmap.js doctor
+node bin/codexmap.js setup --engine fake --no-cloud-scoring
+node bin/codexmap.js index
+node bin/codexmap.js context "add password reset"
+node bin/codexmap.js diff
+node bin/codexmap.js "Build a REST API for todos with auth and PostgreSQL" --engine codex
+node bin/codexmap.js "Fake test session" --engine fake --no-open --no-cloud-scoring
+node bin/codexmap.js watch ./src --prompt "Existing app: detect context drift"
+```
+
+## Project understanding commands
+
+CodexMap now has two complementary modes:
+
+- **Project graph mode**: `codexmap index` builds a durable local graph in `.codexmap/knowledge-graph.json`, plus `.codexmap/PROJECT_INDEX.md` and `.codexmap/learn.md`.
+- **Live drift mode**: `codexmap run <prompt>` starts the Codex sidecar, watches files as they are generated, scores drift, and enables re-anchor workflows.
+
+Useful graph commands:
+
+```bash
+npx codexmap index
+npx codexmap ask where is auth implemented
+npx codexmap context add password reset emails
+npx codexmap diff
+npx codexmap onboard
+```
+
+The graph mode is local and deterministic. Cloud scoring is only involved in live drift sessions unless you explicitly run with cloud scoring enabled.
 
 ## Architecture
 
-4 concurrent agents orchestrated around OpenAI Codex CLI:
+Codex-first runtime supervised by the CLI:
 
 | Agent | Role |
 |---|---|
-| Generator | Runs Codex CLI, writes files to ./output |
+| Generator | Runs the selected engine adapter, Codex by default |
 | Cartographer | Watches filesystem, parses AST, builds graph |
 | Broadcaster | WebSocket server, diffs state, pushes to browser |
-| Sentinel | Scores nodes via embeddings, detects drift |
+| Sentinel | Scores nodes and detects drift |
+| Healer | Processes re-anchor queue through the selected engine adapter |
 
 ## Scoring formula
 
@@ -83,7 +145,28 @@ with your original prompt injected as explicit context.
 
 ## Evals
 
-node scripts/eval/run-all.js
+```bash
+npm run check
+npm test
+npm run test:cli-ux
+npm run test:e2e:fake
+npm run test:e2e:codex   # skipped unless CODEXMAP_RUN_REAL_CODEX_SMOKE=1
+npm run test:package
+npm run pack:smoke
+npm run release:preflight
+```
+
+Run the real Codex smoke only when you intentionally want to spend a tiny amount of Codex/OpenAI quota:
+
+```bash
+export OPENAI_API_KEY=...
+export CODEX_API_KEY="$OPENAI_API_KEY"
+
+CODEXMAP_RUN_REAL_CODEX_SMOKE=1 \
+CODEXMAP_CODEX_MODEL=gpt-5.5 \
+CODEXMAP_GENERATOR_REASONING_EFFORT=low \
+npm run test:e2e:codex
+```
 
 ## Tech stack
 

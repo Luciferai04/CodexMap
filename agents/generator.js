@@ -12,19 +12,21 @@
  * - Always run Codex with --approval-mode auto-edit.
  */
 
-const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { getEngine } = require('../engines');
+const { ensureDir, atomicWriteFile } = require('../lib/atomic');
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
-const SHARED_DIR = path.join(__dirname, '..', 'shared');
+const SHARED_DIR = path.resolve(process.env.CODEXMAP_SHARED_DIR || path.join(__dirname, '..', 'shared'));
 const PROMPT_PATH = path.join(SHARED_DIR, 'prompt.txt');
 const GENERATION_DONE_PATH = path.join(SHARED_DIR, 'generation-done.txt');
-const OUTPUT_DIR = path.join(__dirname, '..', 'output');
+const OUTPUT_DIR = path.resolve(process.env.CODEXMAP_OUTPUT_DIR || path.join(__dirname, '..', 'output'));
 
 // ─── Ensure output directory exists ─────────────────────────────────────────
+ensureDir(SHARED_DIR);
 if (!fs.existsSync(OUTPUT_DIR)) {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  ensureDir(OUTPUT_DIR);
   console.log('[GENERATOR] Created output/ directory');
 }
 
@@ -42,6 +44,9 @@ if (!prompt) {
   process.exit(1);
 }
 
+// Hardened instruction to bypass the codex CLI exec bug
+prompt += "\n\nCRITICAL: You MUST use the file update/edit tools to create and modify files. DO NOT use the exec tool or shell commands (like mkdir or touch), as they will fail due to a known sandbox bug.";
+
 console.log(`[GENERATOR] Starting Codex with prompt: "${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}"`);
 
 // ─── Remove previous generation-done marker ─────────────────────────────────
@@ -54,6 +59,7 @@ try {
 }
 
 const isDemoMode = process.env.OPENAI_API_KEY === 'sk-demo-mode-12345';
+const engineName = process.env.CODEXMAP_ENGINE || (isDemoMode ? 'fake' : 'codex');
 
 if (isDemoMode) {
   console.log('[GENERATOR] 🧪 Simulation Mode Active: Generating Banking App Scaffold');
@@ -61,28 +67,12 @@ if (isDemoMode) {
     simulateBankingApp();
   }, 2000);
 } else {
-  // ─── Resolve Codex binary dynamically ───────────────────────────────────────
-  let CODEX_PATH = 'codex'; // Default: assume it's in PATH
-  try {
-    const { execSync } = require('child_process');
-    const resolved = execSync('which codex', { encoding: 'utf8', timeout: 5000 }).trim();
-    if (resolved) CODEX_PATH = resolved;
-  } catch (e) {
-    // 'which' failed — fall back to bare 'codex' and hope PATH is set
-    console.log('[GENERATOR] ⚠ Could not resolve codex path, using PATH default');
-  }
-  const codex = spawn(CODEX_PATH, [
-    '--model', 'gpt-3.5-turbo',
-    'exec', prompt,
-    '--dangerously-bypass-approvals-and-sandbox',
-    '--cd', OUTPUT_DIR
-  ], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { 
-      ...process.env, 
-      CODEX_API_KEY: process.env.OPENAI_API_KEY,
-      AIDER_MODEL: 'gpt-3.5-turbo'
-    }
+  const engine = getEngine(engineName);
+  const codex = engine.start({
+    prompt,
+    outputDir: OUTPUT_DIR,
+    env: process.env,
+    approvalMode: 'auto-edit',
   });
 
   // Pipe stdout through for logging — do NOT parse it
@@ -97,12 +87,12 @@ if (isDemoMode) {
 
   // ─── On Codex process close ─────────────────────────────────────────────────
   codex.on('close', (code) => {
-    console.log(`[GENERATOR] Codex process exited with code ${code}`);
+    console.log(`[GENERATOR] ${engineName} process exited with code ${code}`);
     finishGeneration();
   });
 
   codex.on('error', (err) => {
-    console.error(`[GENERATOR] ✖ Failed to spawn Codex: ${err.message}`);
+    console.error(`[GENERATOR] ✖ Failed to spawn ${engineName}: ${err.message}`);
     finishGeneration(`error: ${err.message}`);
   });
 }
@@ -130,7 +120,7 @@ function simulateBankingApp() {
 function finishGeneration(errorMsg) {
   try {
     const content = errorMsg || new Date().toISOString();
-    fs.writeFileSync(GENERATION_DONE_PATH, content, 'utf8');
+    atomicWriteFile(GENERATION_DONE_PATH, content, 'utf8');
     console.log('[GENERATOR] ✔ Written generation-done.txt marker');
   } catch (err) {
     console.error(`[GENERATOR] ✖ Failed to write generation-done marker: ${err.message}`);
@@ -138,3 +128,8 @@ function finishGeneration(errorMsg) {
 }
 
 console.log('[GENERATOR] Agent started successfully');
+
+// Signal readiness to Orchestrator
+if (process.send) {
+  process.send({ type: 'ready' });
+}

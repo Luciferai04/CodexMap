@@ -14,15 +14,13 @@ venv/
 output/
 
 # Shared state (runtime, not source)
-shared/map-state.json
-shared/session-drift-log.json
-shared/prompt.txt
-shared/cross-encoder-scores.json
-shared/pageindex-tree.json
-shared/pageindex-scores.json
-shared/api-cost.json
-shared/error.log
-shared/heal-queue.json
+shared/*.json
+shared/*.txt
+shared/*.log
+!shared/.gitkeep
+.codexmap/
+.opencode/
+codex_hackathon_temp_repo/
 
 # OS
 .DS_Store
@@ -36,7 +34,11 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+*.tgz
+*.bak
 
 # Build
 dist/
 build/
+python-wrapper/dist/
+python-wrapper/*.egg-info/

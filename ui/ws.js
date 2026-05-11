@@ -1,82 +1,206 @@
 /**
- * ui/ws.js — WebSocket client for CodexMap dashboard
- * Connects to the Broadcaster (port 4242) and updates the UI state.
- *
- * FIX #2: Proper reconnection with exponential backoff + waiting banner
- * FIX #4: Score components updated from node_grade messages (running average)
- * FIX #5: Agent pills light up on relevant message types
+ * ui/ws.js — WebSocket connection & synchronization logic
+ * Fixed: force style() after every node_grade message
+ * Added: heal_progress / heal_complete handlers
+ * Fixed: proper cy reference via window.CodexGraph
  */
 
 (function() {
-  let socket;
-  let reconnectAttempts = 0;
+  let ws;
   let reconnectTimer;
-  let initialConnectTimer;
-  const WS_URL = `ws://${window.location.hostname || 'localhost'}:4242`;
+  let reconnectAttempts = 0;
+  const MAX_ATTEMPTS = 10;
+  let WS_URL = window.CODEXMAP_WS_URL || `ws://${window.location.hostname || 'localhost'}:${window.CODEXMAP_WS_PORT || 4242}`;
+  const SESSION_ID = new URLSearchParams(window.location.search).get('session') || null;
 
-  // FIX #4: Running averages for score components
-  const scoreHistory = { S1: [], S2: [], A: [], T: [], D: [], S_final: [] };
+  const GRADE_COLORS = {
+    green:   { bg: '#ecfdf5', border: '#22c55e', color: '#14532d' },
+    yellow:  { bg: '#fffbeb', border: '#f59e0b', color: '#78350f' },
+    red:     { bg: '#fef2f2', border: '#ef4444', color: '#7f1d1d' },
+    pending: { bg: '#f8fafc', border: '#94a3b8', color: '#475569' },
+  };
+
+  const pulsingNodes = new Map();
+
+  function getCy() {
+    if (window.CodexGraph && typeof window.CodexGraph.getCy === 'function') {
+      return window.CodexGraph.getCy();
+    }
+    return null;
+  }
+
+  function startPulse(node) {
+    if (pulsingNodes.has(node.id())) return;
+    let opacity = 1;
+    let direction = -1;
+    const interval = setInterval(() => {
+      const cy = getCy();
+      if (!cy || !cy.getElementById(node.id()).length) {
+        clearInterval(interval);
+        pulsingNodes.delete(node.id());
+        return;
+      }
+      opacity += direction * 0.05;
+      if (opacity <= 0.55) direction = 1;
+      if (opacity >= 1.00) direction = -1;
+      node.style('opacity', opacity);
+    }, 50);
+    pulsingNodes.set(node.id(), interval);
+  }
+
+  function stopPulse(node) {
+    const interval = pulsingNodes.get(node.id());
+    if (interval) {
+      clearInterval(interval);
+      pulsingNodes.delete(node.id());
+      node.style('opacity', 1);
+    }
+  }
+
+  function updateGradeCounter() {
+    const cy = getCy();
+    if (!cy) return;
+    const counts = { green: 0, yellow: 0, red: 0, pending: 0 };
+    cy.nodes().forEach(n => {
+      const g = n.data('grade') || 'pending';
+      if (n.data('type') !== 'block') {
+        counts[g] = (counts[g] || 0) + 1;
+      }
+    });
+
+    const pills = {
+      green:   document.getElementById('count-green'),
+      yellow:  document.getElementById('count-yellow'),
+      red:     document.getElementById('count-red'),
+      pending: document.getElementById('count-pending'),
+    };
+    Object.entries(pills).forEach(([grade, el]) => {
+      if (el) el.textContent = counts[grade];
+    });
+
+    const total = counts.green + counts.yellow + counts.red;
+    if (total > 0) {
+      const alignScore = Math.round(
+        (counts.green * 100 + counts.yellow * 50) / total
+      );
+      if (window.updateDriftScoreBadge) window.updateDriftScoreBadge(alignScore);
+    }
+  }
+
+  function applyGradeStyle(node, grade) {
+    const s = GRADE_COLORS[grade] || GRADE_COLORS.pending;
+    node.style({
+      'background-color': s.bg,
+      'border-color':     s.border,
+      'border-width':     grade === 'pending' ? '1.5px' : '2px',
+      'color':            s.color,
+    });
+  }
+
+  async function discoverWebSocketUrl() {
+    if (window.CODEXMAP_WS_URL) return;
+    try {
+      const res = await fetch('/api/health', { cache: 'no-store' });
+      if (!res.ok) return;
+      const health = await res.json();
+      const port = health?.ports?.websocket;
+      if (port) {
+        WS_URL = `ws://${window.location.hostname || 'localhost'}:${port}`;
+        window.CODEXMAP_WS_PORT = port;
+      }
+    } catch (_) {
+      // The fallback 4242 path remains valid for the legacy orchestrator.
+    }
+  }
 
   function connect() {
-    // Wait for CodexGraph to be ready before connecting
-    if (!window.CodexGraph || !window.CodexGraph.isReady()) {
-      setTimeout(connect, 200);
-      return;
-    }
-
-    console.log('[WS] Connecting to', WS_URL);
+    clearTimeout(reconnectTimer);
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    updateConnectionStatus('connecting');
     try {
-      socket = new WebSocket(WS_URL);
-    } catch (e) {
-      console.error('[WS] Failed to create WebSocket:', e);
+      ws = new WebSocket(WS_URL);
+    } catch(e) {
+      console.error('[WS] Failed to create WebSocket:', e.message);
       scheduleReconnect();
       return;
     }
 
-    socket.onopen = () => {
-      console.log('[WS] ✅ Connected to CodexMap Orchestrator');
+    const socket = ws;
+
+    ws.onopen = () => {
+      if (socket !== ws) return;
+      console.log('[WS] Connected');
       reconnectAttempts = 0;
-      clearTimeout(reconnectTimer);
-      clearTimeout(initialConnectTimer);
-      
-      // FIX #2: Update status indicators
-      updateStatusDirect('live', '#00b473', 'Live');
-      hideWaitingBanner();
-      
-      // FIX #5: Broadcaster is always active if WS connects
-      updateAgentPill('broadcaster', true);
-      
-      // FIX #2: Request full state on connect
+      updateConnectionStatus('live');
+      hideError();
       socket.send(JSON.stringify({ type: 'request_full_reset' }));
     };
 
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        console.log('[WS] ←', msg.type, msg.type === 'node_grade' ? msg.payload?.id : '');
-        handleMessage(msg);
-      } catch (err) {
-        console.error('[WS] Parse error:', err);
-      }
-    };
-
-    socket.onclose = () => {
-      console.log('[WS] Disconnected');
-      updateStatusDirect('idle', '#ffc6c6', 'Disconnected');
+    ws.onclose = (event) => {
+      if (socket !== ws) return;
+      console.log('[WS] Closed, code:', event.code);
+      updateConnectionStatus('disconnected');
       scheduleReconnect();
     };
 
-    socket.onerror = (err) => {
-      console.error('[WS] Error:', err);
-      // Don't call socket.close() — onclose will fire automatically
+    ws.onerror = () => {
+      if (socket !== ws) return;
+      console.warn('[WS] Error — orchestrator may not be running');
+      // Force close to trigger onclose → reconnect
+      if (socket.readyState !== WebSocket.CLOSED) {
+        socket.close();
+      }
+    };
+
+    ws.onmessage = (event) => {
+      if (socket !== ws) return;
+      updateConnectionStatus('live');
+      try {
+        handleMessage(JSON.parse(event.data));
+      } catch(e) {
+        console.error('[WS] Bad message:', e.message);
+      }
     };
   }
 
   function scheduleReconnect() {
+    // Never stop trying — just cap the delay
+    const delay = Math.min(1000 * Math.pow(1.5, Math.min(reconnectAttempts, 8)), 8000);
     reconnectAttempts++;
-    const delay = Math.min(1000 * reconnectAttempts, 10000);
-    console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+    console.log(`[WS] Reconnecting in ${(delay/1000).toFixed(1)}s (attempt ${reconnectAttempts})`);
     reconnectTimer = setTimeout(connect, delay);
+  }
+
+  function updateConnectionStatus(state) {
+    const dot  = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    const connText = document.getElementById('conn-status-text');
+    const connDot = document.querySelector('.conn-dot');
+    if (!dot || !text) return;
+    const states = {
+      live:         { color: '#00b473', label: 'Live' },
+      connecting:   { color: '#d4850a', label: 'Connecting...' },
+      disconnected: { color: '#e8453c', label: 'Disconnected' },
+      syncing:      { color: '#5b76fe', label: 'Syncing' },
+    };
+    const s = states[state] || states.disconnected;
+    dot.style.background  = s.color;
+    text.textContent      = s.label;
+    if (connText) connText.textContent = s.label;
+    if (connDot) {
+      connDot.style.background = s.color;
+      connDot.classList.toggle('online', state === 'live');
+    }
+  }
+
+  function showError() {
+    const overlay = document.getElementById('conn-error-overlay');
+    if (overlay) overlay.hidden = false;
+  }
+
+  function hideError() {
+    const overlay = document.getElementById('conn-error-overlay');
+    if (overlay) overlay.hidden = true;
   }
 
   function handleMessage(msg) {
@@ -84,229 +208,301 @@
 
     switch (type) {
       case 'full_reset':
-        window.CodexGraph.update(payload);
-        updateAgentPill('broadcaster', true);
-        updateAgentPill('cartographer', true);
+        if (window.CodexGraph) {
+          window.CodexGraph.update(payload);
+          updateNodeCount(payload.nodes?.length || 0);
+        }
         break;
 
       case 'graph_update':
-        // On incremental graph_update, re-fetch full state for simplicity
-        // (the broadcaster batches diffs but our graph.js does full renders)
-        if (payload && (payload.nodes?.length > 0 || payload.edges?.length > 0)) {
-          // Fetch fresh state from API
-          fetch('/api/state')
-            .then(r => r.json())
-            .then(state => window.CodexGraph.update(state))
-            .catch(e => console.warn('[WS] Failed to fetch state:', e));
-          updateAgentPill('cartographer', true);
+        if (window.CodexGraph) {
+          window.CodexGraph.applyDiff(payload);
+          const cy = getCy();
+          if (cy) updateNodeCount(cy.nodes().length);
         }
         break;
 
-      case 'node_grade':
-        window.CodexGraph.updateGrade(
-          payload.id, payload.grade, payload.score, payload.scoring_breakdown
-        );
-        updateAgentPill('sentinel', true);
-        
-        // FIX #4: Update running score averages from node_grade messages
-        if (payload.scoring_breakdown) {
-          const bd = payload.scoring_breakdown;
-          const mapping = { S1: 's1', S2: 's2', A: 'a', T: 't', D: 'd' };
-          Object.entries(mapping).forEach(([key, bdKey]) => {
-            const val = bd[bdKey] ?? bd[key];
-            if (val != null) {
-              scoreHistory[key].push(val);
-              if (scoreHistory[key].length > 50) scoreHistory[key].shift();
+      case 'node_grade': {
+        const p = payload;
+        if (!p?.id || !p?.grade) break;
+        const cy = getCy();
+        if (!cy) break;
+
+        let node = cy.getElementById(p.id);
+
+        if (!node.length) {
+          console.log('[WS] New node from grade:', p.id);
+          cy.add({
+            group: 'nodes',
+            data: {
+              id:        p.id,
+              label:     p.label || p.id.split('/').pop().replace(/\.(js|ts|jsx|tsx)$/, ''),
+              grade:     p.grade,
+              score:     p.S_final ?? p.score ?? 0,
+              S_final:   p.S_final ?? 0,
+              S1: p.S1 ?? 0, S2: p.S2 ?? 0,
+              A:  p.A  ?? 0, T:  p.T  ?? 0,
+              D:  p.D  ?? 0,
+              path:      p.path      || p.id,
+              type:      p.type      || 'file',
+              lineCount: p.lineCount || 0,
+              code:      p.code      || '',
+              summary:   p.summary   || '',
             }
           });
-          if (payload.score != null) {
-            scoreHistory.S_final.push(payload.score);
-            if (scoreHistory.S_final.length > 50) scoreHistory.S_final.shift();
+          node = cy.getElementById(p.id);
+        }
+
+        node.data('grade',   p.grade);
+        node.data('score',   p.S_final ?? p.score ?? 0);
+        node.data('S_final', p.S_final ?? 0);
+        node.data('S1', p.S1 ?? 0);
+        node.data('S2', p.S2 ?? 0);
+        node.data('A',  p.A  ?? 0);
+        node.data('T',  p.T  ?? 0);
+        node.data('D',  p.D  ?? 0);
+        if (p.summary)           node.data('summary', p.summary);
+        if (p.pageindex_summary) node.data('pageindex_summary', p.pageindex_summary);
+        if (p.code)              node.data('code', p.code);
+        if (p.lineCount)         node.data('lineCount', p.lineCount);
+
+        const s = GRADE_COLORS[p.grade] || GRADE_COLORS.pending;
+        node.style({
+          'background-color': s.bg,
+          'border-color':     s.border,
+          'border-width':     p.grade === 'pending' ? '1.5px' : '2px',
+          'color':            s.color,
+        });
+
+        if (p.grade !== 'pending') {
+          node.style('background-color', '#ffffff');
+          setTimeout(() => node.style('background-color', s.bg), 120);
+        }
+
+        if (p.grade === 'red') startPulse(node);
+        else stopPulse(node);
+
+        node.connectedEdges().forEach(edge => {
+          edge.data('sourceGrade', edge.source().data('grade') || 'pending');
+          edge.data('targetGrade', edge.target().data('grade') || 'pending');
+          if (edge.target().data('grade') === 'red') {
+            edge.style({
+              'line-color':         '#ffc6c6',
+              'line-style':         'dashed',
+              'target-arrow-color': '#600000',
+            });
           }
-          updateScoreTableFromHistory();
+        });
+
+        updateGradeCounter();
+        window.CodexIncident?.refresh?.();
+
+        if (window.openPanelNodeId === p.id && window.updatePanelScores) {
+          window.updatePanelScores(p);
+        }
+
+        const icon = { green:'🟢', yellow:'🟡', red:'🔴' }[p.grade] || '⚪';
+        const pct  = ((p.S_final ?? p.score ?? 0) * 100).toFixed(0);
+        if (window.ActivityFeed) {
+          window.ActivityFeed.addEntry({
+            agent: 'Sentinel',
+            text: `${icon} ${p.label || p.id.split('/').pop()} → ${p.grade} (${pct}%)`,
+          });
+        }
+        console.log(`[WS] Colored: ${p.id} → ${p.grade} ${s.bg}`);
+        break;
+      }
+
+      case 'heal_progress': {
+        const { nodeId, status, label, attempt } = payload || {};
+        if (!nodeId) break;
+        window.CodexGraph?.markRepairState?.(nodeId, status || 'healing', payload);
+        window.CodexIncident?.handleQueueStatus?.({ ...payload, nodeId, status: status || 'healing' });
+        const cy = getCy();
+        if (cy) {
+          const node = cy.getElementById(nodeId);
+          if (node.length) {
+            node.style('border-style', 'dashed');
+            node.style('border-color', '#d4850a');
+            node.style('border-width', '3px');
+            // Add orange glow pulse
+            startPulse(node);
+          }
+        }
+        if (window.openPanelNodeId === nodeId) {
+          const btn = document.querySelector('.btn-reanchor');
+          if (btn) {
+            btn.textContent  = attempt ? `⟳ Rewriting (attempt ${attempt})...` : '⟳ Rewriting file...';
+            btn.style.background = '#d4850a';
+            btn.disabled = true;
+          }
+        }
+        if (window.ActivityFeed) {
+          window.ActivityFeed.addEntry({
+            agent: 'Healer',
+            text: `🔧 Healing ${label || nodeId.split('/').pop()}...`,
+          });
+        }
+        break;
+      }
+
+      case 'heal_complete': {
+        const p = payload;
+        if (!p?.nodeId) break;
+        const repairStatus = p.grade === 'pending' ? 'rescoring' : 'done';
+        window.CodexGraph?.markRepairState?.(p.nodeId, repairStatus, p);
+        window.CodexIncident?.handleQueueStatus?.({ ...p, status: repairStatus });
+        const cy = getCy();
+        if (cy) {
+          const node = cy.getElementById(p.nodeId);
+          if (node.length) {
+            node.data('grade',   p.grade);
+            node.data('score',   p.S_final);
+            node.data('S_final', p.S_final);
+            node.style('border-style', 'solid');
+            node.style('border-width', '2px');
+
+            // Flash white then transition to grade color
+            const s = GRADE_COLORS[p.grade] || GRADE_COLORS.pending;
+            node.style('background-color', '#ffffff');
+            node.style('border-color',     '#5b76fe');
+            setTimeout(() => {
+              node.style({
+                'background-color': s.bg,
+                'border-color':     s.border,
+                'color':            s.color,
+              });
+              if (p.grade !== 'red') stopPulse(node);
+              else startPulse(node); // Keep pulsing if still red
+            }, 400);
+          }
+        }
+
+        if (window.openPanelNodeId === p.nodeId) {
+          if (window.updatePanelScores) window.updatePanelScores(p);
+          const btn = document.querySelector('.btn-reanchor');
+          if (btn) {
+            if (p.grade === 'red') {
+              btn.disabled    = false;
+              btn.textContent = '↺ Re-anchor Again';
+              btn.style.background = '#600000';
+            } else {
+              btn.textContent  = `✓ Healed → ${p.grade}`;
+              btn.style.background = '#00b473';
+              btn.style.color  = 'white';
+              setTimeout(() => btn.closest('.panel-section')?.remove(), 5000);
+            }
+          }
+        }
+
+        const icon = p.improved ? '✅' : '⚠';
+        const label = p.label || p.nodeId.split('/').pop();
+        if (window.ActivityFeed) {
+          window.ActivityFeed.addEntry({
+            agent: 'Healer',
+            text: `${icon} ${label} → ${p.grade} (${((p.S_final||0)*100).toFixed(0)}%)`,
+          });
+        }
+        updateGradeCounter();
+        window.CodexIncident?.refresh?.();
+        break;
+      }
+
+      case 'drift_score':
+        if (window.updateDriftScoreBadge) {
+          window.updateDriftScoreBadge(payload.score);
+        }
+        if (window.DriftTimeline) {
+          window.DriftTimeline.addPoint(payload.score, payload.timestamp);
         }
         break;
 
-      case 'drift_score':
-        updateDriftScore(payload.score);
-        if (window.DriftTimeline) window.DriftTimeline.addPoint(payload);
-        break;
-
-      case 'full_drift_history':
-        if (payload && payload.snapshots && window.DriftTimeline) {
-          payload.snapshots.forEach(s => window.DriftTimeline.addPoint(s));
+      case 'agent_activity':
+        if (window.ActivityFeed) {
+          window.ActivityFeed.addEntry(payload);
+        }
+        if (window.updateAgentPill) {
+          const agent = payload.agent ? payload.agent.toLowerCase() : '';
+          if (agent) {
+            window.updateAgentPill(agent, 'active');
+            setTimeout(() => window.updateAgentPill(agent, 'idle'), 3000);
+          }
         }
         break;
 
       case 'collapse_warning':
-        toggleCollapseBanner(payload.triggered, payload.signals);
-        break;
-
-      case 'generation_done':
-        updateStatusDirect('done', '#00b473', 'Done');
-        updateAgentPill('generator', false);
-        break;
-
-      case 'agent_log':
-        if (window.ActivityFeed) {
-          window.ActivityFeed.addEntry(payload);
-        }
-        // Light up the corresponding agent pill
-        const agentName = (payload.agent || '').toLowerCase();
-        if (agentName) updateAgentPill(agentName, true);
-        break;
-
-      case 'agent_logs_full':
-        // Bulk replay of historical logs
-        if (window.ActivityFeed && Array.isArray(payload)) {
-          payload.slice(-8).forEach(log => window.ActivityFeed.addEntry(log));
+        if (window.handleCollapseWarning) {
+          window.handleCollapseWarning(payload);
+        } else {
+          const banner = document.getElementById('collapse-banner');
+          if (banner) banner.hidden = !payload.triggered;
         }
         break;
 
-      case 'agent_status':
-        if (payload && payload.agent) {
-          const pill = document.getElementById(`pill-${payload.agent}`);
-          if (pill) {
-            pill.className = `agent-pill ${payload.status === 'active' ? 'active' : ''}`;
-          }
+      case 'cost_update':
+        const tokEl = document.getElementById('api-tokens');
+        const costEl = document.getElementById('api-cost');
+        if (tokEl) tokEl.textContent = payload.total_tokens.toLocaleString();
+        if (costEl) costEl.textContent = payload.total_cost_usd.toFixed(4);
+        break;
+
+      case 'settings_update':
+        if (window.updateSettingsUI) {
+          window.updateSettingsUI(payload);
         }
         break;
 
       case 'heal_status_update':
-        console.log('[WS] Heal status:', payload.nodeId, payload.status);
+        // Show toast notification for heal status changes
+        const { nodeId: hNodeId, status: hStatus } = payload || {};
+        if (hNodeId) {
+          window.CodexGraph?.markRepairState?.(hNodeId, hStatus, payload);
+          window.CodexIncident?.handleQueueStatus?.(payload);
+        }
+        if (hStatus === 'done' && window.ActivityFeed) {
+          const hLabel = hNodeId?.split('/').pop() || hNodeId;
+          window.ActivityFeed.addEntry({
+            agent: 'Healer',
+            text: `✅ ${hLabel} rewrite complete — re-scoring...`,
+          });
+        }
+        if (hStatus === 'failed' && window.ActivityFeed) {
+          const hLabel = hNodeId?.split('/').pop() || hNodeId;
+          window.ActivityFeed.addEntry({
+            agent: 'Healer',
+            text: `❌ ${hLabel} rewrite failed — will retry`,
+          });
+        }
         break;
-
-      default:
-        // Ignore unknown message types silently
-        break;
     }
   }
 
-  // FIX #2: Direct DOM status update (no class toggling issues)
-  function updateStatusDirect(state, color, text) {
-    const dot = document.getElementById('status-dot');
-    const label = document.getElementById('status-text');
-    if (dot) {
-      dot.style.backgroundColor = color;
-      dot.style.boxShadow = state === 'live' ? `0 0 8px ${color}` : 'none';
-      dot.className = 'status-dot ' + state;
+  function updateNodeCount(count) {
+    const el = document.getElementById('node-count');
+    if (el) el.textContent = `${count} nodes`;
+  }
+
+  window.CodexWS = {
+    connect,
+    send: (data) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+      const payload = SESSION_ID ? { ...data, sessionId: SESSION_ID } : data;
+      ws.send(JSON.stringify(payload));
+      return true;
+    },
+    updateStatus: updateConnectionStatus
+  };
+
+  async function bootstrapConnection() {
+    await discoverWebSocketUrl();
+    connect();
+  }
+
+  bootstrapConnection();
+
+  setInterval(() => {
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      connect();
     }
-    if (label) label.textContent = text;
-  }
-
-  function updateDriftScore(score) {
-    const val = document.getElementById('drift-score-value');
-    const pill = document.getElementById('drift-pill');
-    if (!val || !pill) return;
-
-    val.textContent = Math.round(score) + '%';
-    
-    pill.className = 'drift-pill roobert';
-    if (score >= 80) pill.classList.add('grade-a-chip');
-    else if (score >= 50) pill.classList.add('grade-c-chip');
-    else pill.classList.add('grade-f-chip');
-  }
-
-  function toggleCollapseBanner(show, signals) {
-    const banner = document.getElementById('collapse-banner');
-    const text = document.getElementById('collapse-banner-text');
-    if (!banner || !text) return;
-
-    if (show) {
-      banner.hidden = false;
-      text.textContent = `⚠ Architectural Collapse Detected — ${Array.isArray(signals) ? signals.join(', ') : signals}`;
-      setTimeout(() => banner.hidden = true, 10000);
-    } else {
-      banner.hidden = true;
-    }
-  }
-
-  // FIX #5: Agent pill activation with auto-timeout
-  function updateAgentPill(agent, active) {
-    const pill = document.getElementById(`pill-${agent}`);
-    if (!pill) return;
-    
-    if (active) {
-      pill.classList.add('active');
-      // Auto-deactivate after 3 seconds (except broadcaster which stays lit while connected)
-      if (agent !== 'broadcaster') {
-        clearTimeout(pill._timeout);
-        pill._timeout = setTimeout(() => pill.classList.remove('active'), 3000);
-      }
-    } else {
-      pill.classList.remove('active');
-    }
-  }
-
-  // FIX #4: Update the sidebar score table from running averages
-  function updateScoreTableFromHistory() {
-    const components = [
-      { id: 's1', key: 'S1' },
-      { id: 's2', key: 'S2' },
-      { id: 'a', key: 'A' },
-      { id: 't', key: 'T' },
-      { id: 'd', key: 'D' }
-    ];
-    
-    components.forEach(c => {
-      const arr = scoreHistory[c.key];
-      if (arr.length === 0) return;
-      
-      const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-      const percent = Math.round(avg * 100);
-      
-      const valEl = document.getElementById(`val-${c.id}`);
-      const barEl = document.getElementById(`bar-${c.id}`);
-      if (valEl) valEl.textContent = percent + '%';
-      if (barEl) {
-        barEl.style.width = percent + '%';
-        barEl.style.backgroundColor = c.id === 'd' 
-          ? (avg > 0.3 ? '#600000' : '#d4850a')
-          : (avg >= 0.8 ? '#00b473' : avg >= 0.5 ? '#d4850a' : '#600000');
-      }
-    });
-  }
-
-  // FIX #2: Waiting banner — shown if not connected after 3 seconds
-  function showWaitingBanner() {
-    let banner = document.getElementById('ws-waiting-banner');
-    if (banner) return;
-    
-    banner = document.createElement('div');
-    banner.id = 'ws-waiting-banner';
-    banner.style.cssText = `
-      position: fixed; top: 56px; left: 0; right: 0; z-index: 200;
-      background: #ffe6cd; border-bottom: 2px solid #d4850a;
-      padding: 10px 20px; display: flex; align-items: center;
-      justify-content: space-between; font-family: var(--font-display);
-      font-size: 14px; color: #746019;
-    `;
-    banner.innerHTML = `
-      <span>⚡ Waiting for orchestrator on port 4242... Run: <code style="background:#fff;padding:2px 6px;border-radius:4px">node orchestrator.js "your prompt"</code></span>
-      <button onclick="this.parentElement.remove()" style="background:#d4850a;color:white;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:600">Retry</button>
-    `;
-    document.body.appendChild(banner);
-  }
-
-  function hideWaitingBanner() {
-    document.getElementById('ws-waiting-banner')?.remove();
-  }
-
-  // Start connection + show waiting banner after 3s if not connected
-  connect();
-  initialConnectTimer = setTimeout(() => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      showWaitingBanner();
-    }
-  }, 3000);
+  }, 5000);
 })();
-
-window.triggerFullReanchor = function() {
-  fetch('http://localhost:3000/reheal', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ batch: true })
-  }).then(res => res.json())
-    .then(data => console.log('Full sweep triggered:', data))
-    .catch(err => console.error('Full sweep failed:', err));
-};
