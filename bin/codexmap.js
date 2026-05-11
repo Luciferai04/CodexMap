@@ -230,6 +230,7 @@ async function main() {
     const cloudScoring = booleanFlag(flags, 'cloudScoring', 'noCloudScoring', userConfig.cloudScoring);
     await runDoctor({
       cwd: process.cwd(),
+      engine: flags.engine || userConfig.engine || 'codex',
       port: flags.port || userConfig.ports?.http,
       wsPort: flags.wsPort || userConfig.ports?.websocket,
       cloudScoring,
